@@ -1,39 +1,61 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
+// _layout.tsx
+import React, { useEffect } from 'react';
+import { SafeAreaView, View, Text } from 'react-native';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
-import 'react-native-reanimated';
+import tw from 'tailwind-react-native-classnames';
+import { MaterialIcons } from '@expo/vector-icons';
+import { initDatabase, ensureDefaultCategories } from '@/lib/database';
 
-import { useColorScheme } from '@/hooks/useColorScheme';
+// Import your screens and ItemsProvider
+import ItemsScreen from './index';
+import CategoriesScreen from './categories';
+import AddItemScreen from './add-item';
+import { ItemsProvider } from '@/lib/ItemsContext';
 
-// Prevent the splash screen from auto-hiding before asset loading is complete.
-SplashScreen.preventAutoHideAsync();
+const Tab = createBottomTabNavigator();
 
-export default function RootLayout() {
-  const colorScheme = useColorScheme();
-  const [loaded] = useFonts({
-    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
-  });
-
+export default function Layout() {
   useEffect(() => {
-    if (loaded) {
-      SplashScreen.hideAsync();
-    }
-  }, [loaded]);
-
-  if (!loaded) {
-    return null;
-  }
+    const initializeDB = async () => {
+      await initDatabase();
+      await ensureDefaultCategories();
+    };
+    initializeDB();
+  }, []);
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="+not-found" />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+    <ItemsProvider>
+      <SafeAreaView style={tw`flex-1 bg-white`}>
+        {/* Header */}
+        <View style={tw`bg-black p-4`}>
+          <Text style={tw`text-white text-center text-xl font-bold`}>My App</Text>
+        </View>
+        <Tab.Navigator
+          screenOptions={({ route }) => ({
+            headerShown: false,
+            tabBarActiveTintColor: '#000',
+            tabBarInactiveTintColor: '#666',
+            tabBarStyle: { backgroundColor: '#fff', borderTopColor: '#000' },
+            tabBarIcon: ({ color, size }) => {
+              let iconName: React.ComponentProps<typeof MaterialIcons>["name"] = "list";
+              if (route.name === 'Items') {
+                iconName = 'list';
+              } else if (route.name === 'Categories') {
+                iconName = 'category';
+              } else if (route.name === 'Add Item') {
+                iconName = 'add';
+              }
+              return <MaterialIcons name={iconName} size={size} color={color} />;
+            },
+          })}
+        >
+          <Tab.Screen name="Items" component={ItemsScreen} />
+          <Tab.Screen name="Categories" component={CategoriesScreen} />
+          <Tab.Screen name="Add Item" component={AddItemScreen} />
+        </Tab.Navigator>
+        <StatusBar style="auto" />
+      </SafeAreaView>
+    </ItemsProvider>
   );
 }
