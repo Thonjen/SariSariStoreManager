@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Image, Alert } from 'react-native';
+import { SafeAreaView, View, Text, TextInput, TouchableOpacity, Image, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import tw from 'tailwind-react-native-classnames';
 import RNPickerSelect from 'react-native-picker-select';
 import { insertItem, fetchCategories } from '../lib/database';
 import { ItemsContext, ItemType } from '@/lib/ItemsContext';
+import { ThemeContext } from '@/lib/ThemeContext';
 
 type CategoryType = {
   id: number;
@@ -18,8 +19,10 @@ export default function AddItem() {
   const [categoryId, setCategoryId] = useState<number | null>(null);
   const [imageUri, setImageUri] = useState('');
   const [categories, setCategories] = useState<CategoryType[]>([]);
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const { setItems } = useContext(ItemsContext);
+  const { items, setItems } = useContext(ItemsContext);
+  const { colorScheme } = useContext(ThemeContext);
 
   // Load categories on mount
   useEffect(() => {
@@ -31,7 +34,7 @@ export default function AddItem() {
       }
     };
     loadCategories();
-  }, [categories]); // ✅ Re-fetch when categories update
+  }, []);
 
   const pickImage = async () => {
     let result = await ImagePicker.launchImageLibraryAsync({
@@ -47,7 +50,7 @@ export default function AddItem() {
   const takePhoto = async () => {
     let permissionResult = await ImagePicker.requestCameraPermissionsAsync();
     if (permissionResult.status !== 'granted') {
-      Alert.alert('Permission required', 'Camera access is needed to take a photo.');
+      Alert.alert('Permission Required', 'Camera access is needed to take a photo.');
       return;
     }
 
@@ -61,8 +64,17 @@ export default function AddItem() {
   };
 
   const handleSave = async () => {
+    setLoading(true);
     if (!name || !price || !categoryId) {
       Alert.alert('Missing Fields', 'Please fill in all fields.');
+      setLoading(false);
+      return;
+    }
+
+    // Prevent duplicate item names (case-insensitive)
+    if (items.find(item => item.name.trim().toLowerCase() === name.trim().toLowerCase())) {
+      Alert.alert('Duplicate Item', 'An item with this name already exists.');
+      setLoading(false);
       return;
     }
 
@@ -75,66 +87,85 @@ export default function AddItem() {
       categoryId,
     };
 
-    setItems((prevItems) => [newItem, ...prevItems]);
+    setItems(prevItems => [newItem, ...prevItems]);
 
     const insertedId = await insertItem(name, parseFloat(price), imageUri, categoryId);
     if (insertedId) {
-      setItems((prevItems) =>
-        prevItems.map((item) => (item.id === tempId ? { ...item, id: insertedId } : item))
+      setItems(prevItems =>
+        prevItems.map(item => (item.id === tempId ? { ...item, id: insertedId } : item))
       );
       Alert.alert('Success', 'Item added successfully');
+      // Reset all fields after successful insertion
+      setName('');
+      setPrice('');
+      setCategoryId(categories.length > 0 ? categories[0].id : null);
+      setImageUri('');
       router.back();
     } else {
-      setItems((prevItems) => prevItems.filter((item) => item.id !== tempId));
+      setItems(prevItems => prevItems.filter(item => item.id !== tempId));
       Alert.alert('Error', 'There was a problem adding the item.');
     }
+    setLoading(false);
   };
 
   return (
-    <View style={tw`flex-1 p-4 bg-white`}>
-      <Text style={tw`text-black text-xl font-bold mb-4`}>Add New Item</Text>
-      <TextInput
-        placeholder="Item Name"
-        style={tw`border border-black p-2 rounded mb-4`}
-        value={name}
-        onChangeText={setName}
-      />
-      <TextInput
-        placeholder="Price"
-        style={tw`border border-black p-2 rounded mb-4`}
-        value={price}
-        onChangeText={setPrice}
-        keyboardType="numeric"
-      />
-
-      {/* Category Picker */}
-      <View style={tw`border border-black rounded mb-4 p-2`}>
-        <RNPickerSelect
-          onValueChange={(value) => setCategoryId(value)}
-          items={categories.map((cat) => ({
-            label: cat.name,
-            value: cat.id,
-          }))}
-          value={categoryId}
-          placeholder={{ label: 'Select a category', value: null }}
+    <SafeAreaView style={tw`flex-1 bg-white`}>
+            {/* Header */}
+      <View style={tw`px-4 py-3 border-b border-black bg-white`}>
+        <Text style={tw`text-2xl font-bold text-black`}>Add Item</Text>
+      </View>
+      <View style={tw`p-4`}>
+        <TextInput
+          placeholder="Item Name"
+          placeholderTextColor="black"
+          style={tw`border border-black p-2 rounded mb-4`}
+          value={name}
+          onChangeText={setName}
         />
-      </View>
+        <TextInput
+          placeholder="Price"
+          placeholderTextColor="black"
+          style={tw`border border-black p-2 rounded mb-4`}
+          value={price}
+          onChangeText={setPrice}
+          keyboardType="numeric"
+        />
 
-      {/* Image Picker */}
-      {imageUri ? (
-        <Image source={{ uri: imageUri }} style={tw`w-full h-40 rounded mb-4`} />
-      ) : null}
-      <View style={tw`flex-row justify-between mb-4`}>
-        <TouchableOpacity onPress={takePhoto} style={tw`p-3 bg-black rounded`}>
-          <Text style={tw`text-white`}>Take Photo</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={pickImage} style={tw`p-3 bg-black rounded`}>
-          <Text style={tw`text-white`}>Choose Photo</Text>
+        {/* Category Picker */}
+        <View style={tw`border border-black rounded mb-4 p-2`}>
+          <RNPickerSelect
+            onValueChange={(value) => setCategoryId(value)}
+            items={categories.map(cat => ({
+              label: cat.name,
+              value: cat.id,
+            }))}
+            value={categoryId}
+            placeholder={{ label: 'Select a category', value: null }}
+            style={{
+              inputIOS: { color: 'black' },
+              inputAndroid: { color: 'black' },
+            }}
+          />
+        </View>
+
+        {/* Image Picker */}
+        {imageUri ? (
+          <Image source={{ uri: imageUri }} style={tw`w-full h-40 rounded mb-4`} />
+        ) : (
+          <Image source={require('../assets/images/Placeholder.jpg')} style={tw`w-full h-40 rounded mb-4`} />
+        )}
+        <View style={tw`flex-row justify-between mb-4`}>
+          <TouchableOpacity onPress={takePhoto} style={tw`p-3 bg-${colorScheme}-500 rounded`}>
+            <Text style={tw`text-white`}>Take Photo</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={pickImage} style={tw`p-3 bg-${colorScheme}-500 rounded`}>
+            <Text style={tw`text-white`}>Choose Photo</Text>
+          </TouchableOpacity>
+        </View>
+        <TouchableOpacity onPress={handleSave} style={tw`p-3 bg-${colorScheme}-500 rounded`} disabled={loading}>
+          <Text style={tw`text-white text-center`}>{loading ? 'Saving...' : 'Save Item'}</Text>
         </TouchableOpacity>
       </View>
-      <TouchableOpacity onPress={handleSave} style={tw`p-3 bg-black rounded`}>
-        <Text style={tw`text-white text-center`}>Save Item</Text>
-      </TouchableOpacity>
-    </View>
+    </SafeAreaView>
   );
 }

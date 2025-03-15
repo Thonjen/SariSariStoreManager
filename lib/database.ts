@@ -1,4 +1,4 @@
-  // SariSariManager/lib/database.ts
+// SariSariManager/lib/database.ts
   import * as SQLite from 'expo-sqlite';
 
   let db: SQLite.SQLiteDatabase | null = null;
@@ -83,6 +83,20 @@
     }
   };
   
+  /**
+   * Fetches an item by ID.
+   */
+  export const fetchItemById = async (id: number): Promise<any | null> => {
+    try {
+      const db = await getDB();
+      const result = await db.runAsync('SELECT * FROM items WHERE id = ?;', [id]);
+      return result || null;
+    } catch (error) {
+      console.error('Error fetching item by ID:', error);
+      return null;
+    }
+  };
+
   /**
    * Updates an item.
    */
@@ -218,5 +232,19 @@
         for (const category of defaultCategories) {
           await insertCategory(category);
         }
+      }
+    };
+
+    /**
+     * Fetches a category by ID.
+     */
+    export const fetchCategoryById = async (id: number): Promise<any | null> => {
+      try {
+        const db = await getDB();
+        const result = await db.runAsync('SELECT * FROM categories WHERE id = ?;', [id]);
+        return result || null;
+      } catch (error) {
+        console.error('Error fetching category by ID:', error);
+        return null;
       }
     };

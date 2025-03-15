@@ -1,13 +1,25 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, FlatList, Alert } from 'react-native';
+import React, { useEffect, useState, useContext } from 'react';
+import {
+  SafeAreaView,
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  FlatList,
+  Alert,
+} from 'react-native';
 import tw from 'tailwind-react-native-classnames';
 import { fetchCategories, insertCategory, deleteCategory, updateCategory } from '../lib/database';
 import EditModal from '@/components/EditModal';
+import { ThemeContext } from '@/lib/ThemeContext';
 
 export default function Categories() {
   const [categories, setCategories] = useState<{ id: number; name: string }[]>([]);
   const [newCategory, setNewCategory] = useState('');
-  const [editingCategory, setEditingCategory] = useState<{ id: number; name: string } | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<{ id: number; name: string } | null>(null);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const { colorScheme } = useContext(ThemeContext);
 
   // Load categories from the database
   const loadCategories = async () => {
@@ -19,42 +31,54 @@ export default function Categories() {
     loadCategories();
   }, []);
 
-  // Optimistic add category
+  // Add new category after checking for duplicates
   const handleAddCategory = async () => {
-    if (!newCategory.trim()) return;
+    setLoading(true);
+    const trimmedName = newCategory.trim();
+    if (!trimmedName) return;
+
+    // Prevent duplicate category names (case-insensitive)
+    const duplicate = categories.find(cat => cat.name.toLowerCase() === trimmedName.toLowerCase());
+    if (duplicate) {
+      Alert.alert('Duplicate Category', 'This category already exists.');
+      setLoading(false);
+      return;
+    }
 
     const tempId = -Date.now(); // Temporary ID
-    const optimisticCategory = { id: tempId, name: newCategory.trim() };
-    setCategories((prev) => [...prev, optimisticCategory]);
+    const optimisticCategory = { id: tempId, name: trimmedName };
+    setCategories(prev => [...prev, optimisticCategory]);
     setNewCategory('');
 
-    const id = await insertCategory(newCategory.trim());
+    const id = await insertCategory(trimmedName);
     if (id) {
-      setCategories((prev) =>
-        prev.map((cat) => (cat.id === tempId ? { ...cat, id } : cat))
+      setCategories(prev =>
+        prev.map(cat => (cat.id === tempId ? { ...cat, id } : cat))
       );
     } else {
-      setCategories((prev) => prev.filter((cat) => cat.id !== tempId));
+      setCategories(prev => prev.filter(cat => cat.id !== tempId));
       Alert.alert('Error', 'Could not add category');
     }
+    setLoading(false);
   };
 
-  // Show confirmation before deleting
+  // Confirm before deleting a category
   const confirmDeleteCategory = (id: number) => {
     Alert.alert(
       'Delete Category',
       'Are you sure you want to delete this category?',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: () => handleDeleteCategory(id) }
+        { text: 'Delete', style: 'destructive', onPress: () => handleDeleteCategory(id) },
       ]
     );
   };
 
-  // Optimistic delete category
+  // Optimistically delete category
   const handleDeleteCategory = async (id: number) => {
+    setLoading(true);
     const originalCategories = [...categories];
-    setCategories((prev) => prev.filter((cat) => cat.id !== id));
+    setCategories(prev => prev.filter(cat => cat.id !== id));
 
     try {
       await deleteCategory(id);
@@ -62,14 +86,34 @@ export default function Categories() {
       setCategories(originalCategories);
       Alert.alert('Error', 'Could not delete category');
     }
+    setLoading(false);
   };
 
-  // Optimistic edit category
+  // Open the edit modal for a specific category
+  const openEditModal = (category: { id: number; name: string }) => {
+    setSelectedCategory(category);
+    setEditModalVisible(true);
+  };
+
+  // Edit category after ensuring no duplicates are created
   const handleEditCategory = async (updatedCategory: { id: number; name: string }) => {
-    setCategories((prev) =>
-      prev.map((cat) => (cat.id === updatedCategory.id ? updatedCategory : cat))
+    const trimmedName = updatedCategory.name.trim();
+    if (!trimmedName) {
+      Alert.alert('Error', 'Category name cannot be empty.');
+      return;
+    }
+    // Prevent duplicate names when editing (ignoring the current category)
+    const duplicate = categories.find(
+      cat => cat.id !== updatedCategory.id && cat.name.toLowerCase() === trimmedName.toLowerCase()
     );
-    const success = await updateCategory(updatedCategory.id, updatedCategory.name);
+    if (duplicate) {
+      Alert.alert('Duplicate Category', 'This category already exists.');
+      return;
+    }
+
+    const newCat = { ...updatedCategory, name: trimmedName };
+    setCategories(prev => prev.map(cat => (cat.id === newCat.id ? newCat : cat)));
+    const success = await updateCategory(newCat.id, newCat.name);
     if (!success) {
       loadCategories();
       Alert.alert('Error', 'Failed to update category.');
@@ -77,49 +121,59 @@ export default function Categories() {
   };
 
   return (
-    <View style={tw`flex-1 p-4 mt-5 bg-white`}>
-      <Text style={tw`text-black text-xl font-bold mb-4`}>Manage Categories</Text>
-      
-      <View style={tw`flex-row mb-4`}>
-        <TextInput
-          placeholder="New Category"
-          style={tw`flex-1 border border-black p-2 rounded`}
-          value={newCategory}
-          onChangeText={setNewCategory}
+    <SafeAreaView style={tw`flex-1 bg-white`}>
+      {/* Header */}
+      <View style={tw`px-4 py-3 border-b border-black bg-white`}>
+        <Text style={tw`text-2xl font-bold text-black`}>Manage Categories</Text>
+      </View>
+      <View style={tw`p-4 mt-5`}>
+        <View style={tw`flex-row mb-4`}>
+          <TextInput
+            placeholder="New Category"
+            placeholderTextColor="black"
+            style={tw`flex-1 border border-black p-2 rounded`}
+            value={newCategory}
+            onChangeText={setNewCategory}
+            autoCapitalize="words"
+          />
+          <TouchableOpacity onPress={handleAddCategory} style={tw`ml-2 p-2 bg-${colorScheme}-500 rounded justify-center`} disabled={loading}>
+            <Text style={tw`text-white font-semibold`}>{loading ? 'Adding...' : 'Add'}</Text>
+          </TouchableOpacity>
+        </View>
+        <FlatList
+          data={categories}
+          keyExtractor={(item) => item.id.toString()}
+          renderItem={({ item }) => (
+            <View style={tw`flex-row items-center justify-between p-2 border-b border-black`}>
+              <Text style={tw`text-black flex-1`} onPress={() => openEditModal(item)}>
+                {item.name}
+              </Text>
+              <View style={tw`flex-row`}>
+                <TouchableOpacity onPress={() => confirmDeleteCategory(item.id)} style={tw`p-2 bg-${colorScheme}-500 rounded`}>
+                  <Text style={tw`text-white`}>Delete</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => openEditModal(item)} style={tw`p-2 bg-${colorScheme}-500 rounded ml-2`}>
+                  <Text style={tw`text-white`}>Edit</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+          ListEmptyComponent={<Text style={tw`text-black text-center mt-4`}>No categories found.</Text>}
         />
-        <TouchableOpacity onPress={handleAddCategory} style={tw`ml-2 p-2 bg-black rounded`}>
-          <Text style={tw`text-white`}>Add</Text>
-        </TouchableOpacity>
       </View>
 
-      <FlatList
-        data={categories}
-        keyExtractor={(item) => item.id.toString()}
-        renderItem={({ item }) => (
-          <View style={tw`flex-row items-center justify-between p-2 border-b border-black`}>
-            <Text style={tw`text-black flex-1`} onPress={() => setEditingCategory(item)}>
-              {item.name}
-            </Text>
-            <TouchableOpacity onPress={() => confirmDeleteCategory(item.id)} style={tw`p-2 bg-black rounded`}>
-              <Text style={tw`text-white`}>Delete</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => setEditingCategory(item)} style={tw`p-2 bg-black rounded ml-2`}>
-              <Text style={tw`text-white`}>Edit</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-        ListEmptyComponent={<Text style={tw`text-black text-center`}>No categories found.</Text>}
-      />
-
-      {editingCategory && (
+      {/* Edit Modal rendered at screen level */}
+      {selectedCategory && (
         <EditModal
-          visible={!!editingCategory}
-          onClose={() => setEditingCategory(null)}
+          visible={editModalVisible}
+          onClose={() => setEditModalVisible(false)}
           type="category"
-          data={editingCategory}
-          refresh={(updatedData: { id: number; name: string }) => handleEditCategory(updatedData)}
+          data={selectedCategory}
+          refresh={(updatedData: { id: number; name: string }) =>
+            setCategories((prev) => prev.map((cat) => (cat.id === updatedData.id ? updatedData : cat)))
+          }
         />
       )}
-    </View>
+    </SafeAreaView>
   );
 }

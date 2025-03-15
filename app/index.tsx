@@ -1,6 +1,6 @@
-// index.tsx
 import React, { useEffect, useMemo, useContext } from 'react';
 import {
+  SafeAreaView,
   View,
   Text,
   FlatList,
@@ -14,8 +14,12 @@ import { useRouter } from 'expo-router';
 import tw from 'tailwind-react-native-classnames';
 import { fetchItems, initDatabase, fetchCategories } from '@/lib/database';
 import ItemCard from '../components/ItemCard';
+import EditModal from '../components/EditModal';
 import { useFocusEffect } from '@react-navigation/native';
 import { ItemsContext, ItemType } from '@/lib/ItemsContext';
+import { MaterialIcons } from '@expo/vector-icons';
+import { ThemeContext } from '@/lib/ThemeContext';
+import { LinearGradient } from 'expo-linear-gradient';
 
 type NamePriceSortOption = {
   label: string;
@@ -32,12 +36,15 @@ type SortOption = NamePriceSortOption | CategorySortOption;
 
 export default function ItemsScreen() {
   const { items, setItems } = useContext(ItemsContext);
+  const { colorScheme } = useContext(ThemeContext);
   const [searchQuery, setSearchQuery] = React.useState('');
   const [categories, setCategories] = React.useState<any[]>([]);
   const [selectedCategories, setSelectedCategories] = React.useState<number[]>([]);
   const [showFilterModal, setShowFilterModal] = React.useState(false);
   const [showSortModal, setShowSortModal] = React.useState(false);
   const [sortOption, setSortOption] = React.useState<SortOption | null>(null);
+  const [editModalVisible, setEditModalVisible] = React.useState(false);
+  const [selectedItem, setSelectedItem] = React.useState<ItemType | null>(null);
   const router = useRouter();
 
   useFocusEffect(
@@ -47,7 +54,6 @@ export default function ItemsScreen() {
         const fetchedItems = await fetchItems();
         setItems(fetchedItems);
         const fetchedCategories = await fetchCategories();
-        console.log('Fetched categories in index.tsx:', fetchedCategories);
         setCategories(fetchedCategories);
       };
       loadData();
@@ -62,7 +68,7 @@ export default function ItemsScreen() {
     );
   };
 
-  const filteredItems = items.filter(item => {
+  const filteredItems = items.filter((item) => {
     const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory =
       selectedCategories.length === 0 ||
@@ -92,11 +98,11 @@ export default function ItemsScreen() {
   const sections = useMemo(() => {
     if (sortOption && sortOption.field === 'category') {
       return categories
-        .map(category => ({
+        .map((category) => ({
           title: category.name,
-          data: filteredItems.filter(item => item.categoryId === category.id),
+          data: filteredItems.filter((item) => item.categoryId === category.id),
         }))
-        .filter(section => section.data.length > 0);
+        .filter((section) => section.data.length > 0);
     }
     return [];
   }, [sortOption, categories, filteredItems]);
@@ -109,111 +115,167 @@ export default function ItemsScreen() {
     { label: 'Category', field: 'category' },
   ];
 
+  // Handler to open the edit modal for a specific item.
+  const openEditModal = (item: ItemType) => {
+    setSelectedItem(item);
+    setEditModalVisible(true);
+  };
+
+  const renderItem = ({ item }: { item: ItemType }) => (
+    <ItemCard item={item} onEdit={openEditModal} />
+  );
+
+  // Map the colorScheme value to gradient colors.
+  const gradientColorsMap = {
+    blue: ['#4FADF7', '#2E90FA'] as const,
+    green: ['#6EE7B7', '#34D399'] as const,
+    red: ['#F87171', '#EF4444'] as const,
+    purple: ['#A78BFA', '#8B5CF6'] as const,
+  };
+  
+  const gradientColors = gradientColorsMap[colorScheme] || gradientColorsMap.blue;
+
+  // Custom Gradient Button for Filter/Sort actions.
+  const GradientButton = ({
+    text,
+    onPress,
+  }: {
+    text: string;
+    onPress: () => void;
+  }) => (
+    <TouchableOpacity
+      onPress={onPress}
+      style={{ flex: 1, marginHorizontal: 4, borderRadius: 25, overflow: 'hidden' }}
+    >
+      <LinearGradient
+        colors={gradientColors}
+        start={[0, 0]}
+        end={[1, 0]}
+        style={{ paddingVertical: 12, alignItems: 'center', justifyContent: 'center' }}
+      >
+        <Text style={tw`text-white font-semibold text-base`}>{text}</Text>
+      </LinearGradient>
+    </TouchableOpacity>
+  );
+
   return (
-    <View style={tw`flex-1 p-4 mt-4 bg-white`}>
-      {/* Search Bar */}
-      <TextInput
-        placeholder="Search Items..."
-        value={searchQuery}
-        onChangeText={setSearchQuery}
-        style={tw`border border-black p-2 rounded mb-4`}
-      />
-
-      {/* Filter & Sort Buttons */}
-      <View style={tw`flex-row justify-between mb-4`}>
-        <TouchableOpacity
-          style={tw`flex-1 mr-2 p-3 bg-black rounded`}
-          onPress={() => setShowFilterModal(true)}
-        >
-          <Text style={tw`text-white text-center`}>Filter by Categories</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={tw`flex-1 ml-2 p-3 bg-black rounded`}
-          onPress={() => setShowSortModal(true)}
-        >
-          <Text style={tw`text-white text-center`}>Sort Items</Text>
-        </TouchableOpacity>
+    <SafeAreaView style={tw`flex-1 bg-gray-100`}>
+      {/* Header */}
+      <View style={tw`px-4 py-3 border-b border-gray-300 bg-white shadow-lg`}>
+        <Text style={tw`text-2xl font-bold text-black`}>Items</Text>
       </View>
 
-      {/* Render SectionList or FlatList */}
-      {sortOption && sortOption.field === 'category' ? (
-        <SectionList
-          sections={sections}
-          keyExtractor={(item) => item.id.toString()}
-          renderItem={({ item }) => <ItemCard item={item} />}
-          renderSectionHeader={({ section: { title } }) => (
-            <Text style={tw`bg-black p-2 font-bold text-white`}>{title}</Text>
-          )}
-          ListEmptyComponent={
-            <Text style={tw`text-black text-center`}>No items found.</Text>
-          }
+      <View style={tw`flex-1 px-4 mt-2`}>
+        {/* Search Bar */}
+        <TextInput
+          placeholder="Search items..."
+          placeholderTextColor="gray"
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          style={tw`bg-white border border-gray-300 px-4 py-2 rounded mb-4 shadow-lg`}
         />
-      ) : (
-        <FlatList
-          data={sortedItems}
-          keyExtractor={(item) => item.id.toString()}
-          renderItem={({ item }) => <ItemCard item={item} />}
-          ListEmptyComponent={
-            <Text style={tw`text-black text-center`}>No items found.</Text>
-          }
-        />
-      )}
 
-{/* Filter Modal */}
-<Modal
-  visible={showFilterModal}
-  transparent
-  animationType="fade"
-  onRequestClose={() => setShowFilterModal(false)}
->
-  <View style={tw`flex-1 justify-center items-center bg-black bg-opacity-60`}>
-    <View style={tw`w-11/12 max-h-4/5 bg-white p-6 rounded-lg shadow-lg`}>
-      <View style={tw`flex-row justify-between items-center mb-4`}>
-        <Text style={tw`text-xl font-semibold text-gray-800`}>
-          Filter by Categories
-        </Text>
-        <Pressable onPress={() => setShowFilterModal(false)}>
-          <Text style={tw`text-gray-500 text-2xl`}>✕</Text>
-        </Pressable>
-      </View>
-      <View style={tw`flex-row flex-wrap justify-start`}>
-        {categories.length > 0 ? (
-          categories.map((category) => (
-            <TouchableOpacity
-              key={category.id}
-              onPress={() => toggleCategoryFilter(category.id)}
-              style={[
-                tw`p-3 m-1 rounded-full border`,
-                selectedCategories.includes(category.id)
-                  ? tw`bg-black border-black`
-                  : tw`bg-white border-gray-300`,
-              ]}
-            >
-              <Text
-                style={tw`${
-                  selectedCategories.includes(category.id)
-                    ? 'text-white'
-                    : 'text-gray-800'
-                }`}
-              >
-                {category.name}
-              </Text>
-            </TouchableOpacity>
-          ))
+        {/* Enhanced Filter & Sort Buttons */}
+        <View style={tw`flex-row justify-between mb-6`}>
+          <GradientButton text="Filter Categories" onPress={() => setShowFilterModal(true)} />
+          <GradientButton text="Sort Items" onPress={() => setShowSortModal(true)} />
+        </View>
+
+        {/* Render SectionList or FlatList */}
+        {sortOption && sortOption.field === 'category' ? (
+          <SectionList
+            sections={sections}
+            keyExtractor={(item) => item.id.toString()}
+            renderItem={({ item }) => <ItemCard item={item} onEdit={openEditModal} />}
+            renderSectionHeader={({ section: { title } }) => (
+              <Text style={tw`bg-gray-200 px-4 py-2 font-bold text-black`}>{title}</Text>
+            )}
+            ListEmptyComponent={
+              <Text style={tw`text-gray-600 text-center mt-4`}>No items found.</Text>
+            }
+          />
         ) : (
-          <Text style={tw`text-gray-600 text-center`}>No categories available.</Text>
+          <FlatList
+            data={sortedItems}
+            keyExtractor={(item) => item.id.toString()}
+            renderItem={renderItem}
+            ListEmptyComponent={
+              <Text style={tw`text-gray-600 text-center mt-4`}>No items found.</Text>
+            }
+          />
         )}
       </View>
-      <Pressable
-        onPress={() => setShowFilterModal(false)}
-        style={tw`mt-6 p-3 bg-black rounded-lg`}
-      >
-        <Text style={tw`text-white text-center font-medium`}>Apply Filters</Text>
-      </Pressable>
-    </View>
-  </View>
-</Modal>
 
+      {/* Filter Modal */}
+      <Modal
+        visible={showFilterModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowFilterModal(false)}
+      >
+        <View style={tw`flex-1 justify-center items-center bg-black bg-opacity-70`}>
+          <View style={tw`w-11/12 bg-white rounded-xl p-6 shadow-2xl`}>
+            {/* Modal Header */}
+            <View style={tw`flex-row justify-between items-center mb-4`}>
+              <Text style={tw`text-2xl font-semibold text-gray-800`}>Filter by Categories</Text>
+              <Pressable onPress={() => setShowFilterModal(false)}>
+                <MaterialIcons name="close" size={28} color="gray" />
+              </Pressable>
+            </View>
+            <View style={tw`flex-row flex-wrap justify-start`}>
+              <TouchableOpacity
+                onPress={() => setSelectedCategories([])}
+                style={[
+                  tw`p-3 m-1 rounded-full border`,
+                  selectedCategories.length === 0
+                    ? tw`bg-${colorScheme}-500 border-${colorScheme}-500`
+                    : tw`bg-white border-gray-300`,
+                ]}
+              >
+                <Text style={selectedCategories.length === 0 ? tw`text-white font-medium` : tw`text-gray-800 font-medium`}>
+                  <MaterialIcons
+                    name="category"
+                    size={16}
+                    color={selectedCategories.length === 0 ? 'white' : 'gray'}
+                  />{' '}
+                  All
+                </Text>
+              </TouchableOpacity>
+              {categories.length > 0 ? (
+                categories.map((category) => (
+                  <TouchableOpacity
+                    key={category.id}
+                    onPress={() => toggleCategoryFilter(category.id)}
+                    style={[
+                      tw`p-3 m-1 rounded-full border`,
+                      selectedCategories.includes(category.id)
+                        ? tw`bg-${colorScheme}-500 border-${colorScheme}-500`
+                        : tw`bg-white border-gray-300`,
+                    ]}
+                  >
+                    <Text style={selectedCategories.includes(category.id) ? tw`text-white font-medium` : tw`text-gray-800 font-medium`}>
+                      <MaterialIcons
+                        name="category"
+                        size={16}
+                        color={selectedCategories.includes(category.id) ? 'white' : 'gray'}
+                      />{' '}
+                      {category.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))
+              ) : (
+                <Text style={tw`text-gray-600 text-center`}>No categories available.</Text>
+              )}
+            </View>
+            <Pressable
+              onPress={() => setShowFilterModal(false)}
+              style={tw`mt-6 py-3 bg-${colorScheme}-500 rounded-xl shadow-lg`}
+            >
+              <Text style={tw`text-white text-center font-semibold`}>Apply Filters</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
 
       {/* Sort Modal */}
       <Modal
@@ -222,19 +284,25 @@ export default function ItemsScreen() {
         animationType="slide"
         onRequestClose={() => setShowSortModal(false)}
       >
-        <View style={tw`flex-1 justify-center items-center bg-black bg-opacity-50`}>
-          <View style={tw`w-11/12 bg-white p-4 rounded`}>
-            <Text style={tw`text-lg font-bold mb-4 text-black`}>Sort Items</Text>
-            {sortOptions.map(option => (
+        <View style={tw`flex-1 justify-center items-center bg-black bg-opacity-70`}>
+          <View style={tw`w-11/12 bg-white rounded-xl p-6 shadow-2xl`}>
+            {/* Modal Header */}
+            <View style={tw`flex-row justify-between items-center mb-4`}>
+              <Text style={tw`text-2xl font-semibold text-gray-800`}>Sort Items</Text>
+              <Pressable onPress={() => setShowSortModal(false)}>
+                <MaterialIcons name="close" size={28} color="gray" />
+              </Pressable>
+            </View>
+            {sortOptions.map((option) => (
               <Pressable
                 key={option.label}
                 onPress={() => {
                   setSortOption(option);
                   setShowSortModal(false);
                 }}
-                style={tw`p-2 border-b border-black`}
+                style={tw`py-3 border-b border-gray-200`}
               >
-                <Text style={tw`text-black`}>{option.label}</Text>
+                <Text style={tw`text-gray-800 font-medium`}>{option.label}</Text>
               </Pressable>
             ))}
             {sortOption && (
@@ -243,14 +311,27 @@ export default function ItemsScreen() {
                   setSortOption(null);
                   setShowSortModal(false);
                 }}
-                style={tw`mt-4 p-2 bg-black rounded`}
+                style={tw`mt-4 py-3 bg-${colorScheme}-500 rounded-xl shadow-lg`}
               >
-                <Text style={tw`text-white text-center`}>Clear Sorting</Text>
+                <Text style={tw`text-white text-center font-semibold`}>Clear Sorting</Text>
               </Pressable>
             )}
           </View>
         </View>
       </Modal>
-    </View>
+
+      {/* Edit Modal rendered at screen level */}
+      {selectedItem && (
+        <EditModal
+          visible={editModalVisible}
+          onClose={() => setEditModalVisible(false)}
+          type="item"
+          data={selectedItem}
+          refresh={(updatedItem) =>
+            setItems((prev) => prev.map((i) => (i.id === updatedItem.id ? updatedItem : i)))
+          }
+        />
+      )}
+    </SafeAreaView>
   );
 }
