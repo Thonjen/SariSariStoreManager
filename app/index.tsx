@@ -9,6 +9,8 @@ import {
   TextInput,
   Modal,
   Pressable,
+  Animated,
+  Easing,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import tw from 'tailwind-react-native-classnames';
@@ -20,6 +22,7 @@ import { ItemsContext, ItemType } from '@/lib/ItemsContext';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ThemeContext } from '@/lib/ThemeContext';
 import { LinearGradient } from 'expo-linear-gradient';
+import AddItemModal from '@/components/AddItemModal'; // Import the Add Item Modal component
 
 type NamePriceSortOption = {
   label: string;
@@ -45,7 +48,21 @@ export default function ItemsScreen() {
   const [sortOption, setSortOption] = React.useState<SortOption | null>(null);
   const [editModalVisible, setEditModalVisible] = React.useState(false);
   const [selectedItem, setSelectedItem] = React.useState<ItemType | null>(null);
+  const [addModalVisible, setAddModalVisible] = React.useState(false);
   const router = useRouter();
+
+  // Animated values for chathead button.
+  const scaleAnim = React.useRef(new Animated.Value(1)).current;
+  const opacityAnim = React.useRef(new Animated.Value(1)).current;
+
+  // Map the colorScheme to gradient colors.
+  const gradientColorsMap = {
+    blue: ['#4FADF7', '#2E90FA'] as const,
+    green: ['#6EE7B7', '#34D399'] as const,
+    red: ['#F87171', '#EF4444'] as const,
+    purple: ['#A78BFA', '#8B5CF6'] as const,
+  };
+  const gradientColors = gradientColorsMap[colorScheme] || gradientColorsMap.blue;
 
   useFocusEffect(
     React.useCallback(() => {
@@ -59,6 +76,46 @@ export default function ItemsScreen() {
       loadData();
     }, [])
   );
+
+  // Chathead pulse effect.
+  useEffect(() => {
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(scaleAnim, {
+          toValue: 1.2,
+          duration: 800,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(scaleAnim, {
+          toValue: 1,
+          duration: 800,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    pulse.start();
+    return () => pulse.stop();
+  }, []);
+
+  const handleChatheadPress = () => {
+    // Shrink animation before opening the Add Item Modal.
+    Animated.parallel([
+      Animated.timing(scaleAnim, {
+        toValue: 0.8,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(opacityAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setAddModalVisible(true);
+    });
+  };
 
   const toggleCategoryFilter = (categoryId: number) => {
     setSelectedCategories((prevSelected) =>
@@ -125,39 +182,6 @@ export default function ItemsScreen() {
     <ItemCard item={item} onEdit={openEditModal} />
   );
 
-  // Map the colorScheme value to gradient colors.
-  const gradientColorsMap = {
-    blue: ['#4FADF7', '#2E90FA'] as const,
-    green: ['#6EE7B7', '#34D399'] as const,
-    red: ['#F87171', '#EF4444'] as const,
-    purple: ['#A78BFA', '#8B5CF6'] as const,
-  };
-  
-  const gradientColors = gradientColorsMap[colorScheme] || gradientColorsMap.blue;
-
-  // Custom Gradient Button for Filter/Sort actions.
-  const GradientButton = ({
-    text,
-    onPress,
-  }: {
-    text: string;
-    onPress: () => void;
-  }) => (
-    <TouchableOpacity
-      onPress={onPress}
-      style={{ flex: 1, marginHorizontal: 4, borderRadius: 25, overflow: 'hidden' }}
-    >
-      <LinearGradient
-        colors={gradientColors}
-        start={[0, 0]}
-        end={[1, 0]}
-        style={{ paddingVertical: 12, alignItems: 'center', justifyContent: 'center' }}
-      >
-        <Text style={tw`text-white font-semibold text-base`}>{text}</Text>
-      </LinearGradient>
-    </TouchableOpacity>
-  );
-
   return (
     <SafeAreaView style={tw`flex-1 bg-gray-100`}>
       {/* Header */}
@@ -217,7 +241,9 @@ export default function ItemsScreen() {
           <View style={tw`w-11/12 bg-white rounded-xl p-6 shadow-2xl`}>
             {/* Modal Header */}
             <View style={tw`flex-row justify-between items-center mb-4`}>
-              <Text style={tw`text-2xl font-semibold text-gray-800`}>Filter by Categories</Text>
+              <Text style={tw`text-2xl font-semibold text-gray-800`}>
+                Filter by Categories
+              </Text>
               <Pressable onPress={() => setShowFilterModal(false)}>
                 <MaterialIcons name="close" size={28} color="gray" />
               </Pressable>
@@ -232,7 +258,13 @@ export default function ItemsScreen() {
                     : tw`bg-white border-gray-300`,
                 ]}
               >
-                <Text style={selectedCategories.length === 0 ? tw`text-white font-medium` : tw`text-gray-800 font-medium`}>
+                <Text
+                  style={
+                    selectedCategories.length === 0
+                      ? tw`text-white font-medium`
+                      : tw`text-gray-800 font-medium`
+                  }
+                >
                   <MaterialIcons
                     name="category"
                     size={16}
@@ -253,7 +285,13 @@ export default function ItemsScreen() {
                         : tw`bg-white border-gray-300`,
                     ]}
                   >
-                    <Text style={selectedCategories.includes(category.id) ? tw`text-white font-medium` : tw`text-gray-800 font-medium`}>
+                    <Text
+                      style={
+                        selectedCategories.includes(category.id)
+                          ? tw`text-white font-medium`
+                          : tw`text-gray-800 font-medium`
+                      }
+                    >
                       <MaterialIcons
                         name="category"
                         size={16}
@@ -332,6 +370,70 @@ export default function ItemsScreen() {
           }
         />
       )}
+
+      {/* Floating Chathead Button */}
+      {!addModalVisible && (
+        <Animated.View
+          style={[
+            {
+              position: 'absolute',
+              bottom: 20,
+              right: 20,
+              width: 50,
+              height: 50,
+              borderRadius: 30,
+              backgroundColor: gradientColors[0],
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 1000,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.3,
+              shadowRadius: 5,
+            },
+          ]}
+        >
+          <TouchableOpacity onPress={handleChatheadPress}>
+            <MaterialIcons name="add" size={32} color="white" />
+          </TouchableOpacity>
+        </Animated.View>
+      )}
+
+      {/* Add Item Modal */}
+      <AddItemModal
+        visible={addModalVisible}
+        onClose={() => {
+          setAddModalVisible(false);
+          Animated.timing(opacityAnim, {
+            toValue: 1,
+            duration: 300,
+            useNativeDriver: true,
+          }).start();
+        }}
+      />
     </SafeAreaView>
   );
 }
+
+// Custom Gradient Button for Filter/Sort actions.
+const GradientButton = ({
+  text,
+  onPress,
+}: {
+  text: string;
+  onPress: () => void;
+}) => (
+  <TouchableOpacity
+    onPress={onPress}
+    style={{ flex: 1, marginHorizontal: 4, borderRadius: 25, overflow: 'hidden' }}
+  >
+    <LinearGradient
+      colors={['#4FADF7', '#2E90FA']}
+      start={[0, 0]}
+      end={[1, 0]}
+      style={{ paddingVertical: 12, alignItems: 'center', justifyContent: 'center' }}
+    >
+      <Text style={tw`text-white font-semibold text-base`}>{text}</Text>
+    </LinearGradient>
+  </TouchableOpacity>
+);

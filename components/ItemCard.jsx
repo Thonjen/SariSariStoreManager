@@ -1,5 +1,5 @@
 import React, { useContext, useState } from 'react';
-import { View, Text, Image, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, Image, TouchableOpacity, Alert, Modal, Pressable } from 'react-native';
 import tw from 'tailwind-react-native-classnames';
 import { useRouter } from 'expo-router';
 import { deleteItem } from '../lib/database';
@@ -12,6 +12,7 @@ const ItemCard = ({ item, onEdit }) => {
   const { items, setItems } = useContext(ItemsContext);
   const { colorScheme } = useContext(ThemeContext);
   const [loading, setLoading] = useState(false);
+  const [viewModalVisible, setViewModalVisible] = useState(false);
 
   const handleDelete = async () => {
     Alert.alert(
@@ -41,17 +42,20 @@ const ItemCard = ({ item, onEdit }) => {
 
   return (
     <View style={tw`flex-row items-center p-3 border border-gray-300 rounded-lg bg-white mb-4 shadow-lg`}>
-      {item.imageUri ? (
-        <Image 
-          source={{ uri: item.imageUri }} 
-          style={tw`w-24 h-24 rounded-lg mr-4 border border-gray-300`} 
-        />
-      ) : (
-        <Image 
-          source={require('../assets/images/Placeholder.jpg')} 
-          style={tw`w-24 h-24 rounded-lg mr-4 border border-gray-300`} 
-        />
-      )}
+      {/* Wrap the image in TouchableOpacity to trigger the view modal */}
+      <TouchableOpacity onPress={() => setViewModalVisible(true)}>
+        {item.imageUri ? (
+          <Image 
+            source={{ uri: item.imageUri }} 
+            style={tw`w-24 h-24 rounded-lg mr-4 border border-gray-300`} 
+          />
+        ) : (
+          <Image 
+            source={require('../assets/images/Placeholder.jpg')} 
+            style={tw`w-24 h-24 rounded-lg mr-4 border border-gray-300`} 
+          />
+        )}
+      </TouchableOpacity>
 
       <View style={tw`flex-1`}>
         <Text style={tw`text-black font-semibold text-base`}>{item.name}</Text>
@@ -77,6 +81,45 @@ const ItemCard = ({ item, onEdit }) => {
           <MaterialIcons name="delete" size={20} color="white" />
         </TouchableOpacity>
       </View>
+
+      {/* View Modal */}
+      <Modal
+        visible={viewModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setViewModalVisible(false)}
+      >
+        <View style={tw`flex-1 justify-center items-center bg-black bg-opacity-50`}>
+          <View style={tw`bg-white rounded-lg p-4 w-11/12 max-w-md`}>
+            {/* Close Button */}
+            <Pressable 
+              onPress={() => setViewModalVisible(false)}
+              style={tw`absolute top-2 right-2`}
+            >
+              <MaterialIcons name="close" size={24} color="gray" />
+            </Pressable>
+            <View style={tw`items-center`}>
+              {item.imageUri ? (
+                <Image 
+                  source={{ uri: item.imageUri }} 
+                  style={tw`w-64 h-64 rounded-lg`} 
+                />
+              ) : (
+                <Image 
+                  source={require('../assets/images/Placeholder.jpg')} 
+                  style={tw`w-64 h-64 rounded-lg`} 
+                />
+              )}
+              <Text style={tw`text-lg font-bold mt-2`}>{item.name}</Text>
+              <Text style={tw`text-base text-gray-700`}>₱{item.price}</Text>
+              <View style={tw`flex-row items-center mt-1`}>
+                <MaterialIcons name="category" size={16} color="gray" />
+                <Text style={tw`ml-1 text-sm text-gray-600`}>{item.categoryName || 'No Category'}</Text>
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };

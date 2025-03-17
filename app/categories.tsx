@@ -149,11 +149,11 @@ export default function Categories() {
                 {item.name}
               </Text>
               <View style={tw`flex-row`}>
-                <TouchableOpacity onPress={() => confirmDeleteCategory(item.id)} style={tw`p-2 bg-${colorScheme}-500 rounded`}>
-                  <Text style={tw`text-white`}>Delete</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => openEditModal(item)} style={tw`p-2 bg-${colorScheme}-500 rounded ml-2`}>
+                <TouchableOpacity onPress={() => openEditModal(item)} style={tw`p-2 bg-${colorScheme}-500 rounded `}>
                   <Text style={tw`text-white`}>Edit</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => confirmDeleteCategory(item.id)} style={tw`p-2 bg-red-500 rounded ml-2`}>
+                  <Text style={tw`text-white`}>Delete</Text>
                 </TouchableOpacity>
               </View>
             </View>
