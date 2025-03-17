@@ -7,7 +7,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { initDatabase, ensureDefaultCategories } from '@/lib/database';
 import ItemsScreen from './index';
 import CategoriesScreen from './categories';
-import AddItemScreen from './add-item';
+import AddItemScreen from './additem';
 import SettingsScreen from './settings';
 import { ItemsProvider } from '@/lib/ItemsContext';
 import { ThemeProvider, ThemeContext } from '@/lib/ThemeContext';
