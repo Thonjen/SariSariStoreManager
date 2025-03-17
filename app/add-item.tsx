@@ -38,6 +38,7 @@ export default function AddItem() {
   }, []);
 
   const pickImage = async () => {
+    // Launch the image library UI
     let result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       quality: 0.5,
@@ -49,14 +50,17 @@ export default function AddItem() {
   };
 
   const takePhoto = async () => {
-    let permissionResult = await ImagePicker.requestCameraPermissionsAsync();
-    if (permissionResult.status !== 'granted') {
+    const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+    if (permissionResult.status !== ImagePicker.PermissionStatus.GRANTED) {
       Alert.alert('Permission Required', 'Camera access is needed to take a photo.');
       return;
     }
 
+    // Launch the camera UI with explicit media type and optional editing enabled
     let result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
       quality: 0.5,
+      allowsEditing: true,
     });
 
     if (!result.canceled && result.assets.length > 0) {
@@ -74,15 +78,14 @@ export default function AddItem() {
 
     // Prevent duplicate item names (case-insensitive)
     const storedItems = await AsyncStorage.getItem('items');
-    const items: ItemType[] = storedItems ? JSON.parse(storedItems) : [];
+    const existingItems: ItemType[] = storedItems ? JSON.parse(storedItems) : [];
     
-    if (items.find((item: ItemType) => item.name.trim().toLowerCase() === name.trim().toLowerCase())) {
+    if (existingItems.find((item: ItemType) => item.name.trim().toLowerCase() === name.trim().toLowerCase())) {
       Alert.alert('Duplicate Item', 'An item with this name already exists.');
       setLoading(false);
       return;
     }
     
-
     const tempId = Date.now();
     const newItem: ItemType = {
       id: tempId,
@@ -92,7 +95,7 @@ export default function AddItem() {
       categoryId,
     };
 
-    const updatedItems = [newItem, ...items];
+    const updatedItems = [newItem, ...existingItems];
     await AsyncStorage.setItem('items', JSON.stringify(updatedItems));
     setItems(updatedItems);
 
@@ -119,7 +122,7 @@ export default function AddItem() {
 
   return (
     <SafeAreaView style={tw`flex-1 bg-white`}>
-            {/* Header */}
+      {/* Header */}
       <View style={tw`px-4 py-3 border-b border-black bg-white`}>
         <Text style={tw`text-2xl font-bold text-black`}>Add Item</Text>
       </View>
