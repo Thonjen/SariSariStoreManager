@@ -1,5 +1,5 @@
 import React, { useContext } from 'react';
-import { SafeAreaView, View, Text, TouchableOpacity } from 'react-native';
+import { SafeAreaView, View, Text, TouchableOpacity, Image  } from 'react-native';
 import { useRouter } from 'expo-router';
 import tw from 'tailwind-react-native-classnames';
 import { ThemeContext, ColorScheme } from '@/lib/ThemeContext';
@@ -120,12 +120,16 @@ export default function Settings() {
         <View style={tw`mt-6`}>
           <Text style={tw`text-lg text-black`}>About</Text>
           <Text style={tw`text-base text-gray-700 mt-2`}>
-            SariSariStoreManager is an app designed to help manage your store efficiently.
+            A simple inventory app for sari-sari store owners to organize and manage their products efficiently.
           </Text>
         </View>
         {/* Author Section */}
         <View style={tw`mt-6`}>
           <Text style={tw`text-lg text-black`}>Author</Text>
+          <Image 
+            source={require('@/assets/images/author.jpg')} 
+            style={tw`w-24 h-24 rounded-full`}
+          />
           <Text style={tw`text-base text-gray-700 mt-2`}>
             Developed by [Your Name]. For more information, visit [Your Website].
           </Text>

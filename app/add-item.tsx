@@ -7,6 +7,7 @@ import RNPickerSelect from 'react-native-picker-select';
 import { insertItem, fetchCategories } from '../lib/database';
 import { ItemsContext, ItemType } from '@/lib/ItemsContext';
 import { ThemeContext } from '@/lib/ThemeContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type CategoryType = {
   id: number;
@@ -72,11 +73,15 @@ export default function AddItem() {
     }
 
     // Prevent duplicate item names (case-insensitive)
-    if (items.find(item => item.name.trim().toLowerCase() === name.trim().toLowerCase())) {
+    const storedItems = await AsyncStorage.getItem('items');
+    const items: ItemType[] = storedItems ? JSON.parse(storedItems) : [];
+    
+    if (items.find((item: ItemType) => item.name.trim().toLowerCase() === name.trim().toLowerCase())) {
       Alert.alert('Duplicate Item', 'An item with this name already exists.');
       setLoading(false);
       return;
     }
+    
 
     const tempId = Date.now();
     const newItem: ItemType = {
@@ -87,13 +92,15 @@ export default function AddItem() {
       categoryId,
     };
 
-    setItems(prevItems => [newItem, ...prevItems]);
+    const updatedItems = [newItem, ...items];
+    await AsyncStorage.setItem('items', JSON.stringify(updatedItems));
+    setItems(updatedItems);
 
     const insertedId = await insertItem(name, parseFloat(price), imageUri, categoryId);
     if (insertedId) {
-      setItems(prevItems =>
-        prevItems.map(item => (item.id === tempId ? { ...item, id: insertedId } : item))
-      );
+      const finalItems = updatedItems.map(item => (item.id === tempId ? { ...item, id: insertedId } : item));
+      await AsyncStorage.setItem('items', JSON.stringify(finalItems));
+      setItems(finalItems);
       Alert.alert('Success', 'Item added successfully');
       // Reset all fields after successful insertion
       setName('');
@@ -102,7 +109,9 @@ export default function AddItem() {
       setImageUri('');
       router.back();
     } else {
-      setItems(prevItems => prevItems.filter(item => item.id !== tempId));
+      const revertedItems = updatedItems.filter(item => item.id !== tempId);
+      await AsyncStorage.setItem('items', JSON.stringify(revertedItems));
+      setItems(revertedItems);
       Alert.alert('Error', 'There was a problem adding the item.');
     }
     setLoading(false);
