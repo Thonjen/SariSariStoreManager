@@ -1,28 +1,37 @@
-import React, { useContext } from 'react';
-import { SafeAreaView, View, Text, TouchableOpacity, Image  } from 'react-native';
-import { useRouter } from 'expo-router';
+import React, { useContext, useEffect, useState } from 'react';
+import { SafeAreaView, View, Text, TouchableOpacity, Image, Modal, Alert } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import tw from 'tailwind-react-native-classnames';
-import { ThemeContext, ColorScheme } from '@/lib/ThemeContext';
+import { ThemeContext } from '@/lib/ThemeContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as FileSystem from 'expo-file-system';
-import * as DocumentPicker from 'expo-document-picker';
-import * as Sharing from 'expo-sharing';
+import { fetchCategories, fetchItems } from '@/lib/database';
+import { MaterialIcons } from '@expo/vector-icons';
+
 
 export default function Settings() {
-  const router = useRouter();
-  const { colorScheme, setColorScheme } = useContext(ThemeContext);
+  const navigation = useNavigation();
+  const { colorScheme, setColorScheme } = useContext(ThemeContext); // Get current color scheme and setter function
+  const [isModalVisible, setModalVisible] = useState(false);
+  const [totalCategories, setTotalCategories] = useState(0);
+  const [totalItems, setTotalItems] = useState(0);
+  const [totalTransactions, setTotalTransactions] = useState(0);
+  const [recentlyDeleted, setRecentlyDeleted] = useState(0);
 
-  const colorSchemes: { name: string; primary: ColorScheme }[] = [
+  const colorSchemes = [
     { name: 'Blue', primary: 'blue' },
     { name: 'Green', primary: 'green' },
     { name: 'Red', primary: 'red' },
     { name: 'Purple', primary: 'purple' },
   ];
 
+  // Handle color scheme change
+  const handleColorSchemeChange = (newColorScheme: ColorScheme) => {
+    setColorScheme(newColorScheme); // Update color scheme in context
+  };
+
   const saveStorage = async () => {
     try {
-      const data = { colorScheme };
-      await AsyncStorage.setItem('settingsData', JSON.stringify(data));
+      await AsyncStorage.setItem('settingsData', JSON.stringify({ colorScheme }));
     } catch (error) {
       console.error('Error saving settings data:', error);
     }
@@ -32,45 +41,35 @@ export default function Settings() {
     try {
       const data = await AsyncStorage.getItem('settingsData');
       if (data) {
-        const { colorScheme } = JSON.parse(data);
-        setColorScheme(colorScheme);
+        setColorScheme(JSON.parse(data).colorScheme);
       }
     } catch (error) {
       console.error('Error loading settings data:', error);
     }
   };
 
-  const saveDatabaseToFile = async () => {
+  const loadStatistics = async () => {
     try {
-      const dbUri = `${FileSystem.documentDirectory}SQLite/sarisari.db`;
-      const fileUri = `${FileSystem.documentDirectory}sarisari_backup.db`;
-      await FileSystem.copyAsync({ from: dbUri, to: fileUri });
-      await Sharing.shareAsync(fileUri);
-      alert('Database saved and ready for download!');
+      const categories = await fetchCategories();
+      const items = await fetchItems();
+      const transactions = JSON.parse(await AsyncStorage.getItem('transactions') || '[]'); // Default fallback
+      const deletedItems = JSON.parse(await AsyncStorage.getItem('recentlyDeleted') || '[]'); // Default fallback
+
+      setTotalCategories(categories.length);
+      setTotalItems(items.length);
+      setTotalTransactions(transactions.length);
+      setRecentlyDeleted(deletedItems.length);
     } catch (error) {
-      console.error('Error saving database to file:', error);
+      console.error('Error loading statistics:', error);
     }
   };
 
-  const loadDatabaseFromFile = async () => {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({ type: '*/*' });
-      if (!result.canceled) {
-        const uri = (result as any).uri;
-        const dbUri = `${FileSystem.documentDirectory}SQLite/sarisari.db`;
-        await FileSystem.copyAsync({ from: uri, to: dbUri });
-        alert('Database loaded successfully!');
-      }
-    } catch (error) {
-      console.error('Error loading database from file:', error);
-    }
-  };
-
-  React.useEffect(() => {
+  useEffect(() => {
     loadStorage();
+    loadStatistics();
   }, []);
 
-  React.useEffect(() => {
+  useEffect(() => {
     saveStorage();
   }, [colorScheme]);
 
@@ -78,64 +77,83 @@ export default function Settings() {
     <SafeAreaView style={tw`flex-1 bg-white`}>
       <View style={tw`p-4`}>
         <Text style={tw`text-2xl font-bold text-black`}>Settings</Text>
+
+        {/* Color Scheme Selection */}
         <View style={tw`mt-6`}>
           <Text style={tw`text-lg text-black`}>Color Scheme</Text>
           <View style={tw`flex-row flex-wrap mt-2`}>
             {colorSchemes.map((scheme) => (
               <TouchableOpacity
                 key={scheme.name}
-                onPress={() => setColorScheme(scheme.primary)}
-                style={tw`p-2 m-1 rounded-full border ${colorScheme === scheme.primary ? `bg-${scheme.primary}-500 border-${scheme.primary}-500` : 'bg-white border-gray-300'}`}
+                onPress={() => handleColorSchemeChange(scheme.primary)} // Update color scheme on press
+                style={tw`p-2 m-1 rounded-full border ${
+                  colorScheme === scheme.primary ? `bg-${scheme.primary}-500 border-${scheme.primary}-500` : 'bg-white border-gray-300'
+                }`}
               >
                 <Text style={tw`${colorScheme === scheme.primary ? 'text-white' : 'text-black'}`}>{scheme.name}</Text>
               </TouchableOpacity>
             ))}
           </View>
         </View>
-        <TouchableOpacity
-          onPress={() => router.push('/minigame')}
-          style={tw`mt-6 py-3 bg-${colorScheme}-500 rounded shadow-lg`}
-        >
 
-          
-          <Text style={tw`text-white text-center font-semibold`}>Play Mini Game</Text>
+        {/* Navigation Buttons */}
+        <TouchableOpacity onPress={() => navigation.navigate('Minigame')} style={tw`mt-6 py-3 bg-${colorScheme}-500 rounded shadow-lg`}>
+          <Text style={tw`text-white text-center font-semibold`}>Play Minigame</Text>
         </TouchableOpacity>
 
-                {/* Save and Load Database Buttons */}
-                <View style={tw`mt-6`}>
-          <TouchableOpacity
-            onPress={saveDatabaseToFile}
-            style={tw`py-3 bg-${colorScheme}-900 rounded shadow-lg mb-4`}
-          >
-            <Text style={tw`text-white text-center font-semibold`}>Save Database to File</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={loadDatabaseFromFile}
-            style={tw`py-3 bg-${colorScheme}-800 rounded shadow-lg`}
-          >
-            <Text style={tw`text-white text-center font-semibold`}>Load Database from File</Text>
-          </TouchableOpacity>
-        </View>
-        {/* About Section */}
-        <View style={tw`mt-6`}>
-          <Text style={tw`text-lg text-black`}>About</Text>
-          <Text style={tw`text-base text-gray-700 mt-2`}>
-            A simple inventory app for sari-sari store owners to organize and manage their products efficiently.
-          </Text>
-        </View>
-        {/* Author Section */}
-        <View style={tw`mt-6`}>
-          <Text style={tw`text-lg text-black`}>Author</Text>
-          <Image 
-            source={require('@/assets/images/author.jpg')} 
-            style={tw`w-24 h-24 rounded-full`}
-          />
-          <Text style={tw`text-base text-gray-700 mt-2`}>
-            Developed by [Your Name]. For more information, visit [Your Website].
-          </Text>
-        </View>
+        {/* About Button */}
+        <TouchableOpacity onPress={() => setModalVisible(true)} style={tw`mt-6 py-3 bg-${colorScheme}-800 rounded shadow-lg`}>
+          <Text style={tw`text-white text-center font-semibold`}>About</Text>
+        </TouchableOpacity>
 
+        {/* About Modal */}
+        <Modal animationType="slide" transparent={true} visible={isModalVisible} onRequestClose={() => setModalVisible(false)}>
+          <View style={tw`flex-1 justify-center items-center bg-${colorScheme}-100 bg-opacity-50`}>
+            <View style={tw`bg-white p-6 rounded-lg w-4/5`}>
+              <Text style={tw`text-xl font-bold text-black mb-4`}>About</Text>
+              <Text style={tw`text-gray-700 mb-4`}>
+                A simple inventory app for sari-sari store owners to organize and manage their products efficiently.
+              </Text>
+              <Text style={tw`text-xl font-bold text-black mb-4`}>Author</Text>
+              <Image source={require('@/assets/images/author.jpg')} style={tw`w-24 h-24 rounded-full self-center mb-4`} />
+              <Text style={tw`text-gray-700 text-center`}>Developed by Thonjen. For more information, Dont.</Text>
+              <TouchableOpacity onPress={() => setModalVisible(false)} style={tw`mt-6 py-2 bg-${colorScheme}-700 rounded shadow-lg`}>
+                <Text style={tw`text-white text-center font-semibold`}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Statistics Section */}
+        <View style={tw`mt-6 px-4`}>
+          <Text style={tw`text-xl font-bold text-black mb-3`}>Statistics</Text>
+
+          <View style={tw`flex-row flex-wrap justify-between`}>
+            {[{ label: 'Categories', value: totalCategories, icon: 'category', color: '#4A90E2' },
+              { label: 'Items', value: totalItems, icon: 'inventory-2', color: '#27AE60' },
+              { label: 'Transactions', value: totalTransactions, icon: 'attach-money', color: '#E67E22', onPress: () => navigation.navigate('TransactionScreen') },
+              { label: 'Deleted', value: recentlyDeleted, icon: 'delete', color: '#E74C3C', onPress: () => navigation.navigate('RecentlyDeletedScreen') }
+            ].map(({ label, value, icon, color, onPress }, index) => (
+              <TouchableOpacity
+                key={label}
+                onPress={onPress}
+                activeOpacity={0.7}
+                style={[
+                  tw`bg-white p-3 rounded-lg shadow-sm flex-row items-center border border-gray-200`,
+                  { width: '48%', marginTop: index > 1 ? 12 : 0 }
+                ]}
+              >
+                <MaterialIcons name={icon as any} size={28} color={color} style={tw`mr-2`} />
+                <View>
+                  <Text style={tw`text-gray-600 text-sm`}>{label}</Text>
+                  <Text style={tw`text-xl font-bold text-black`}>{value}</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
       </View>
     </SafeAreaView>
   );
 }
+

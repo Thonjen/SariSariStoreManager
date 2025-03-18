@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useContext } from 'react';
+import React, { useEffect, useMemo, useContext, useState, useCallback } from 'react';
 import {
   SafeAreaView,
   View,
@@ -9,10 +9,7 @@ import {
   TextInput,
   Modal,
   Pressable,
-  Animated,
-  Easing,
 } from 'react-native';
-import { useRouter } from 'expo-router';
 import tw from 'tailwind-react-native-classnames';
 import { fetchItems, initDatabase, fetchCategories } from '@/lib/database';
 import ItemCard from '../components/ItemCard';
@@ -22,7 +19,7 @@ import { ItemsContext, ItemType } from '@/lib/ItemsContext';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ThemeContext } from '@/lib/ThemeContext';
 import { LinearGradient } from 'expo-linear-gradient';
-import AddItemModal from '@/components/AddItemModal'; // Import the Add Item Modal component
+import AddItemModal from '@/components/AddItemModal';
 
 type NamePriceSortOption = {
   label: string;
@@ -40,32 +37,18 @@ type SortOption = NamePriceSortOption | CategorySortOption;
 export default function ItemsScreen() {
   const { items, setItems } = useContext(ItemsContext);
   const { colorScheme } = useContext(ThemeContext);
-  const [searchQuery, setSearchQuery] = React.useState('');
-  const [categories, setCategories] = React.useState<any[]>([]);
-  const [selectedCategories, setSelectedCategories] = React.useState<number[]>([]);
-  const [showFilterModal, setShowFilterModal] = React.useState(false);
-  const [showSortModal, setShowSortModal] = React.useState(false);
-  const [sortOption, setSortOption] = React.useState<SortOption | null>(null);
-  const [editModalVisible, setEditModalVisible] = React.useState(false);
-  const [selectedItem, setSelectedItem] = React.useState<ItemType | null>(null);
-  const [addModalVisible, setAddModalVisible] = React.useState(false);
-  const router = useRouter();
-
-  // Animated values for chathead button.
-  const scaleAnim = React.useRef(new Animated.Value(1)).current;
-  const opacityAnim = React.useRef(new Animated.Value(1)).current;
-
-  // Map the colorScheme to gradient colors.
-  const gradientColorsMap = {
-    blue: ['#4FADF7', '#2E90FA'] as const,
-    green: ['#6EE7B7', '#34D399'] as const,
-    red: ['#F87171', '#EF4444'] as const,
-    purple: ['#A78BFA', '#8B5CF6'] as const,
-  };
-  const gradientColors = gradientColorsMap[colorScheme] || gradientColorsMap.blue;
+  const [searchQuery, setSearchQuery] = useState('');
+  const [categories, setCategories] = useState<any[]>([]);
+  const [selectedCategories, setSelectedCategories] = useState<number[]>([]);
+  const [showFilterModal, setShowFilterModal] = useState(false);
+  const [showSortModal, setShowSortModal] = useState(false);
+  const [sortOption, setSortOption] = useState<SortOption | null>(null);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<ItemType | null>(null);
+  const [addModalVisible, setAddModalVisible] = useState(false);
 
   useFocusEffect(
-    React.useCallback(() => {
+    useCallback(() => {
       const loadData = async () => {
         await initDatabase();
         const fetchedItems = await fetchItems();
@@ -77,51 +60,20 @@ export default function ItemsScreen() {
     }, [])
   );
 
-  // Chathead pulse effect.
-  useEffect(() => {
-    const pulse = Animated.loop(
-      Animated.sequence([
-        Animated.timing(scaleAnim, {
-          toValue: 1.2,
-          duration: 800,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.timing(scaleAnim, {
-          toValue: 1,
-          duration: 800,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-      ])
-    );
-    pulse.start();
-    return () => pulse.stop();
-  }, []);
-
-  const handleChatheadPress = () => {
-    // Shrink animation before opening the Add Item Modal.
-    Animated.parallel([
-      Animated.timing(scaleAnim, {
-        toValue: 0.8,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(opacityAnim, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      setAddModalVisible(true);
-    });
+  // Map the colorScheme to gradient colors.
+  const gradientColorsMap = {
+    blue: ['#4FADF7', '#2E90FA'],
+    green: ['#6EE7B7', '#34D399'],
+    red: ['#F87171', '#EF4444'],
+    purple: ['#A78BFA', '#8B5CF6'],
   };
+  const gradientColors = gradientColorsMap[colorScheme] || gradientColorsMap.blue;
+
+
 
   const toggleCategoryFilter = (categoryId: number) => {
-    setSelectedCategories((prevSelected) =>
-      prevSelected.includes(categoryId)
-        ? prevSelected.filter((id) => id !== categoryId)
-        : [...prevSelected, categoryId]
+    setSelectedCategories((prev) =>
+      prev.includes(categoryId) ? prev.filter((id) => id !== categoryId) : [...prev, categoryId]
     );
   };
 
@@ -139,8 +91,8 @@ export default function ItemsScreen() {
       return [...filteredItems].sort((a, b) => {
         if (typeof a[field] === 'number' && typeof b[field] === 'number') {
           return order === 'asc'
-            ? (a[field] as number) - (b[field] as number)
-            : (b[field] as number) - (a[field] as number);
+            ? a[field] - b[field]
+            : b[field] - a[field];
         }
         const aField = String(a[field]).toLowerCase();
         const bField = String(b[field]).toLowerCase();
@@ -157,12 +109,13 @@ export default function ItemsScreen() {
       return categories
         .map((category) => ({
           title: category.name,
-          data: filteredItems.filter((item) => item.categoryId === category.id),
+          data: items.filter((item) => item.categoryId === category.id), // Use `items` instead of `filteredItems`
         }))
         .filter((section) => section.data.length > 0);
     }
     return [];
-  }, [sortOption, categories, filteredItems]);
+  }, [sortOption, categories, items]); // Use `items` instead of `filteredItems`
+  
 
   const sortOptions: SortOption[] = [
     { label: 'Name Ascending', field: 'name', order: 'asc' },
@@ -172,7 +125,6 @@ export default function ItemsScreen() {
     { label: 'Category', field: 'category' },
   ];
 
-  // Handler to open the edit modal for a specific item.
   const openEditModal = (item: ItemType) => {
     setSelectedItem(item);
     setEditModalVisible(true);
@@ -199,13 +151,13 @@ export default function ItemsScreen() {
           style={tw`bg-white border border-gray-300 px-4 py-2 rounded mb-4 shadow-lg`}
         />
 
-        {/* Enhanced Filter & Sort Buttons */}
+        {/* Filter & Sort Buttons */}
         <View style={tw`flex-row justify-between mb-6`}>
           <GradientButton text="Filter Categories" onPress={() => setShowFilterModal(true)} />
           <GradientButton text="Sort Items" onPress={() => setShowSortModal(true)} />
         </View>
 
-        {/* Render SectionList or FlatList */}
+        {/* Item List */}
         {sortOption && sortOption.field === 'category' ? (
           <SectionList
             sections={sections}
@@ -214,19 +166,18 @@ export default function ItemsScreen() {
             renderSectionHeader={({ section: { title } }) => (
               <Text style={tw`bg-gray-200 px-4 py-2 font-bold text-black`}>{title}</Text>
             )}
-            ListEmptyComponent={
-              <Text style={tw`text-gray-600 text-center mt-4`}>No items found.</Text>
-            }
+            ListEmptyComponent={<Text style={tw`text-gray-600 text-center mt-4`}>No items found.</Text>}
           />
         ) : (
-          <FlatList
-            data={sortedItems}
-            keyExtractor={(item) => item.id.toString()}
-            renderItem={renderItem}
-            ListEmptyComponent={
-              <Text style={tw`text-gray-600 text-center mt-4`}>No items found.</Text>
-            }
-          />
+        <FlatList
+          data={sortedItems}
+          keyExtractor={(item) => item.id.toString()}
+          renderItem={renderItem}
+          numColumns={2} // 💡 Enables grid layout
+          columnWrapperStyle={tw`justify-between`}
+          ListEmptyComponent={<Text style={tw`text-gray-600 text-center mt-4`}>No items found.</Text>}
+        />
+
         )}
       </View>
 
@@ -239,11 +190,8 @@ export default function ItemsScreen() {
       >
         <View style={tw`flex-1 justify-center items-center bg-black bg-opacity-70`}>
           <View style={tw`w-11/12 bg-white rounded-xl p-6 shadow-2xl`}>
-            {/* Modal Header */}
             <View style={tw`flex-row justify-between items-center mb-4`}>
-              <Text style={tw`text-2xl font-semibold text-gray-800`}>
-                Filter by Categories
-              </Text>
+              <Text style={tw`text-2xl font-semibold text-gray-800`}>Filter by Categories</Text>
               <Pressable onPress={() => setShowFilterModal(false)}>
                 <MaterialIcons name="close" size={28} color="gray" />
               </Pressable>
@@ -319,12 +267,10 @@ export default function ItemsScreen() {
       <Modal
         visible={showSortModal}
         transparent
-        animationType="slide"
         onRequestClose={() => setShowSortModal(false)}
       >
         <View style={tw`flex-1 justify-center items-center bg-black bg-opacity-70`}>
           <View style={tw`w-11/12 bg-white rounded-xl p-6 shadow-2xl`}>
-            {/* Modal Header */}
             <View style={tw`flex-row justify-between items-center mb-4`}>
               <Text style={tw`text-2xl font-semibold text-gray-800`}>Sort Items</Text>
               <Pressable onPress={() => setShowSortModal(false)}>
@@ -358,7 +304,7 @@ export default function ItemsScreen() {
         </View>
       </Modal>
 
-      {/* Edit Modal rendered at screen level */}
+      {/* Edit Modal */}
       {selectedItem && (
         <EditModal
           visible={editModalVisible}
@@ -366,74 +312,66 @@ export default function ItemsScreen() {
           type="item"
           data={selectedItem}
           refresh={(updatedItem) =>
-            setItems((prev) => prev.map((i) => (i.id === updatedItem.id ? updatedItem : i)))
+            setItems((prev) =>
+              prev.map((i) => (i.id === updatedItem.id ? updatedItem : i))
+            )
           }
         />
       )}
 
-      {/* Floating Chathead Button */}
+      {/* Floating Add Button */}
       {!addModalVisible && (
-        <Animated.View
+        <View
           style={[
-            {
-              position: 'absolute',
-              bottom: 20,
-              right: 20,
-              width: 50,
-              height: 50,
-              borderRadius: 30,
-              backgroundColor: gradientColors[0],
-              alignItems: 'center',
-              justifyContent: 'center',
-              zIndex: 1000,
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.3,
-              shadowRadius: 5,
-            },
+            tw`absolute bottom-5 right-5 w-12 h-12 rounded-full shadow-lg`,
+            { backgroundColor: gradientColors[0], alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
           ]}
         >
-          <TouchableOpacity onPress={handleChatheadPress}>
+          <TouchableOpacity onPress={() => setAddModalVisible(true)}>
             <MaterialIcons name="add" size={32} color="white" />
           </TouchableOpacity>
-        </Animated.View>
+        </View>
       )}
 
       {/* Add Item Modal */}
-      <AddItemModal
-        visible={addModalVisible}
-        onClose={() => {
-          setAddModalVisible(false);
-          Animated.timing(opacityAnim, {
-            toValue: 1,
-            duration: 300,
-            useNativeDriver: true,
-          }).start();
-        }}
-      />
+      <AddItemModal visible={addModalVisible} onClose={() => setAddModalVisible(false)} />
     </SafeAreaView>
   );
 }
 
-// Custom Gradient Button for Filter/Sort actions.
+// Custom Gradient Button used for Filter/Sort actions.
 const GradientButton = ({
   text,
   onPress,
 }: {
   text: string;
   onPress: () => void;
-}) => (
-  <TouchableOpacity
-    onPress={onPress}
-    style={{ flex: 1, marginHorizontal: 4, borderRadius: 25, overflow: 'hidden' }}
-  >
-    <LinearGradient
-      colors={['#4FADF7', '#2E90FA']}
-      start={[0, 0]}
-      end={[1, 0]}
-      style={{ paddingVertical: 12, alignItems: 'center', justifyContent: 'center' }}
+}) => {
+  const { colorScheme } = useContext(ThemeContext);
+  const gradientColorsMap = {
+    blue: ['#4FADF7', '#2E90FA'],
+    green: ['#6EE7B7', '#34D399'],
+    red: ['#F87171', '#EF4444'],
+    purple: ['#A78BFA', '#8B5CF6'],
+  };
+  const gradientColors = gradientColorsMap[colorScheme] || gradientColorsMap.blue;
+
+  // Safely cast to `readonly [string, string]`
+  const gradientColorsSafe = gradientColors as unknown as readonly [string, string];
+
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      style={{ flex: 1, marginHorizontal: 4, borderRadius: 25, overflow: 'hidden' }}
     >
-      <Text style={tw`text-white font-semibold text-base`}>{text}</Text>
-    </LinearGradient>
-  </TouchableOpacity>
-);
+      <LinearGradient
+        colors={gradientColorsSafe} // Use the safely cast gradientColors
+        start={[0, 0]}
+        end={[1, 0]}
+        style={{ paddingVertical: 12, alignItems: 'center', justifyContent: 'center' }}
+      >
+        <Text style={tw`text-white font-semibold text-base`}>{text}</Text>
+      </LinearGradient>
+    </TouchableOpacity>
+  );
+};

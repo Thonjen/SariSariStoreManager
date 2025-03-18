@@ -7,24 +7,39 @@ import {
   TouchableOpacity,
   FlatList,
   Alert,
+  ActivityIndicator
 } from 'react-native';
 import tw from 'tailwind-react-native-classnames';
-import { fetchCategories, insertCategory, deleteCategory, updateCategory } from '../lib/database';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { fetchItemsByCategory } from '@/lib/database'; // Import the function
 import EditModal from '@/components/EditModal';
 import { ThemeContext } from '@/lib/ThemeContext';
+import { Animated } from 'react-native';
 
 export default function Categories() {
-  const [categories, setCategories] = useState<{ id: number; name: string }[]>([]);
+  const [categories, setCategories] = useState<{ id: number; name: string, itemsCount: number }[]>([]);
   const [newCategory, setNewCategory] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<{ id: number; name: string } | null>(null);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [loading, setLoading] = useState(false);
   const { colorScheme } = useContext(ThemeContext);
 
-  // Load categories from the database
+  // Load categories from AsyncStorage and fetch item count for each category
   const loadCategories = async () => {
-    const cats = await fetchCategories();
-    setCategories(cats);
+    const storedCategories = await AsyncStorage.getItem('categories');
+    const cats = storedCategories ? JSON.parse(storedCategories) : [];
+
+    // For each category, fetch the item count using the `fetchItemsByCategory` function
+    const categoriesWithItemsCount = await Promise.all(cats.map(async (cat: { id: number; name: string }) => {
+      const items = await fetchItemsByCategory(cat.id);
+      return {
+        ...cat,
+        itemsCount: items ? items.length : 0 // Ensure itemsCount is 0 if no items are found
+      };
+    }));
+
+    // Now set the categories with the item count property
+    setCategories(categoriesWithItemsCount);
   };
 
   useEffect(() => {
@@ -46,19 +61,13 @@ export default function Categories() {
     }
 
     const tempId = -Date.now(); // Temporary ID
-    const optimisticCategory = { id: tempId, name: trimmedName };
+    const optimisticCategory = { id: tempId, name: trimmedName, itemsCount: 0 };
     setCategories(prev => [...prev, optimisticCategory]);
     setNewCategory('');
 
-    const id = await insertCategory(trimmedName);
-    if (id) {
-      setCategories(prev =>
-        prev.map(cat => (cat.id === tempId ? { ...cat, id } : cat))
-      );
-    } else {
-      setCategories(prev => prev.filter(cat => cat.id !== tempId));
-      Alert.alert('Error', 'Could not add category');
-    }
+    const updatedCategories = [...categories, { id: Date.now(), name: trimmedName, itemsCount: 0 }];
+    await AsyncStorage.setItem('categories', JSON.stringify(updatedCategories));
+    setCategories(updatedCategories);
     setLoading(false);
   };
 
@@ -78,14 +87,9 @@ export default function Categories() {
   const handleDeleteCategory = async (id: number) => {
     setLoading(true);
     const originalCategories = [...categories];
-    setCategories(prev => prev.filter(cat => cat.id !== id));
-
-    try {
-      await deleteCategory(id);
-    } catch (error) {
-      setCategories(originalCategories);
-      Alert.alert('Error', 'Could not delete category');
-    }
+    const updatedCategories = originalCategories.filter(cat => cat.id !== id);
+    setCategories(updatedCategories);
+    await AsyncStorage.setItem('categories', JSON.stringify(updatedCategories));
     setLoading(false);
   };
 
@@ -112,12 +116,9 @@ export default function Categories() {
     }
 
     const newCat = { ...updatedCategory, name: trimmedName };
-    setCategories(prev => prev.map(cat => (cat.id === newCat.id ? newCat : cat)));
-    const success = await updateCategory(newCat.id, newCat.name);
-    if (!success) {
-      loadCategories();
-      Alert.alert('Error', 'Failed to update category.');
-    }
+    const updatedCategories = categories.map(cat => (cat.id === newCat.id ? newCat : cat));
+    setCategories(updatedCategories);
+    await AsyncStorage.setItem('categories', JSON.stringify(updatedCategories));
   };
 
   return (
@@ -126,51 +127,76 @@ export default function Categories() {
       <View style={tw`px-4 py-3 border-b border-black bg-white`}>
         <Text style={tw`text-2xl font-bold text-black`}>Manage Categories</Text>
       </View>
+
+      {/* New Category */}
       <View style={tw`p-4 mt-5`}>
         <View style={tw`flex-row mb-4`}>
           <TextInput
             placeholder="New Category"
             placeholderTextColor="black"
-            style={tw`flex-1 border border-black p-2 rounded`}
+            style={tw`flex-1 border border-black p-3 rounded-xl text-lg`}
             value={newCategory}
             onChangeText={setNewCategory}
             autoCapitalize="words"
           />
-          <TouchableOpacity onPress={handleAddCategory} style={tw`ml-2 p-2 bg-${colorScheme}-500 rounded justify-center`} disabled={loading}>
-            <Text style={tw`text-white font-semibold`}>{loading ? 'Adding...' : 'Add'}</Text>
+          <TouchableOpacity
+            onPress={handleAddCategory}
+            style={tw`ml-3 p-3 bg-${colorScheme}-500 rounded-xl justify-center`}
+            disabled={loading}
+          >
+            <Text style={tw`text-white font-semibold text-lg`}>
+              {loading ? 'Adding...' : 'Add'}
+            </Text>
           </TouchableOpacity>
         </View>
+
         <FlatList
           data={categories}
           keyExtractor={(item) => item.id.toString()}
           renderItem={({ item }) => (
-            <View style={tw`flex-row items-center justify-between p-2 border-b border-black`}>
-              <Text style={tw`text-black flex-1`} onPress={() => openEditModal(item)}>
-                {item.name}
-              </Text>
+            <Animated.View style={[tw`flex-row items-center justify-between p-3 border-b border-black`, { elevation: 2 }]}>
+              <View style={tw`flex-1`}>
+                <Text
+                  style={tw`text-black text-lg font-medium`}
+                  onPress={() => openEditModal(item)}
+                >
+                  {item.name}
+                </Text>
+                <Text style={tw`text-gray-500 text-sm`}>Items: {item.itemsCount}</Text>
+              </View>
+
               <View style={tw`flex-row`}>
-                <TouchableOpacity onPress={() => openEditModal(item)} style={tw`p-2 bg-${colorScheme}-500 rounded `}>
+                <TouchableOpacity
+                  onPress={() => openEditModal(item)}
+                  style={tw`p-3 bg-${colorScheme}-500 rounded-xl`}
+                >
                   <Text style={tw`text-white`}>Edit</Text>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={() => confirmDeleteCategory(item.id)} style={tw`p-2 bg-red-500 rounded ml-2`}>
+
+                <TouchableOpacity
+                  onPress={() => confirmDeleteCategory(item.id)}
+                  style={tw`p-3 bg-red-500 rounded-xl ml-2`}
+                >
                   <Text style={tw`text-white`}>Delete</Text>
                 </TouchableOpacity>
               </View>
-            </View>
+            </Animated.View>
           )}
           ListEmptyComponent={<Text style={tw`text-black text-center mt-4`}>No categories found.</Text>}
         />
       </View>
 
-      {/* Edit Modal rendered at screen level */}
+      {/* Edit Modal */}
       {selectedCategory && (
         <EditModal
           visible={editModalVisible}
           onClose={() => setEditModalVisible(false)}
           type="category"
           data={selectedCategory}
-          refresh={(updatedData: { id: number; name: string }) =>
-            setCategories((prev) => prev.map((cat) => (cat.id === updatedData.id ? updatedData : cat)))
+          refresh={(updatedData: { id: number; name: string, itemsCount: number }) =>
+            setCategories((prev) =>
+              prev.map((cat) => (cat.id === updatedData.id ? updatedData : cat))
+            )
           }
         />
       )}

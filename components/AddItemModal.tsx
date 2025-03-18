@@ -2,10 +2,9 @@ import React, { useState, useEffect, useContext } from 'react';
 import { Modal, View, Text, TextInput, TouchableOpacity, Image, Alert, ActivityIndicator, SafeAreaView } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import RNPickerSelect from 'react-native-picker-select';
-import { insertItem, fetchCategories } from '../lib/database';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ItemsContext, ItemType } from '@/lib/ItemsContext';
 import { ThemeContext } from '@/lib/ThemeContext';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import tw from 'tailwind-react-native-classnames';
 
 type AddItemModalProps = {
@@ -25,7 +24,8 @@ export default function AddItemModal({ visible, onClose }: AddItemModalProps) {
 
   useEffect(() => {
     const loadCategories = async () => {
-      const cats = await fetchCategories();
+      const storedCategories = await AsyncStorage.getItem('categories');
+      const cats = storedCategories ? JSON.parse(storedCategories) : [];
       setCategories(cats);
       if (cats.length > 0) setCategoryId(cats[0].id);
     };
@@ -35,9 +35,11 @@ export default function AddItemModal({ visible, onClose }: AddItemModalProps) {
   const pickImage = async () => {
     try {
       let result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'], // Updated here
+        allowsEditing: true,
         quality: 0.5,
       });
+  
       if (!result.canceled) {
         setImageUri(result.assets[0].uri);
       }
@@ -45,19 +47,21 @@ export default function AddItemModal({ visible, onClose }: AddItemModalProps) {
       Alert.alert('Error', 'There was an error picking the image.');
     }
   };
-
+  
   const takePhoto = async () => {
     try {
       const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
-      if (permissionResult.status !== ImagePicker.PermissionStatus.GRANTED) {
+      if (permissionResult.status !== 'granted') {
         Alert.alert('Permission Required', 'Camera access is needed to take a photo.');
         return;
       }
+  
       let result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        quality: 0.5,
+        mediaTypes: ['images'], // Updated here
         allowsEditing: true,
+        quality: 0.5,
       });
+  
       if (!result.canceled) {
         setImageUri(result.assets[0].uri);
       }
@@ -65,7 +69,7 @@ export default function AddItemModal({ visible, onClose }: AddItemModalProps) {
       Alert.alert('Error', 'There was an error taking the photo.');
     }
   };
-
+  
   const handleSave = async () => {
     setLoading(true);
     if (!name || !price || !categoryId) {
@@ -84,15 +88,8 @@ export default function AddItemModal({ visible, onClose }: AddItemModalProps) {
     const updatedItems = [newItem, ...existingItems];
     await AsyncStorage.setItem('items', JSON.stringify(updatedItems));
     setItems(updatedItems);
-    const insertedId = await insertItem(name, parseFloat(price), imageUri, categoryId);
-    if (insertedId) {
-      setItems(updatedItems.map((item) => (item.id === newItem.id ? { ...item, id: insertedId } : item)));
-      Alert.alert('Success', 'Item added successfully');
-      onClose();
-    } else {
-      setItems(updatedItems.filter((item) => item.id !== newItem.id));
-      Alert.alert('Error', 'There was a problem adding the item.');
-    }
+    Alert.alert('Success', 'Item added successfully');
+    onClose();
     setLoading(false);
   };
 
