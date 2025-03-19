@@ -15,15 +15,30 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import tw from 'tailwind-react-native-classnames';
 import { updateItem, updateCategory, fetchCategories } from '../lib/database';
-import { ItemsContext } from '../lib/ItemsContext';
 import { ThemeContext } from '../lib/ThemeContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+type Item = {
+  id: number;
+  name: string;
+  price: number;
+  imageUri?: string;
+  categoryId?: number;
+  categoryName?: string;
+};
+
+type Category = {
+  id: number;
+  name: string;
+  count?: number;
+};
 
 type EditModalProps = {
   visible: boolean;
   onClose: () => void;
   type: 'item' | 'category';
-  data: any;
-  refresh: (updatedData: any) => void;
+  data: Item | Category;
+  refresh: (updatedData: Item | Category) => void;
 };
 
 export default function EditModal({ visible, onClose, type, data, refresh }: EditModalProps) {
@@ -31,10 +46,10 @@ export default function EditModal({ visible, onClose, type, data, refresh }: Edi
   const { width: screenWidth } = useWindowDimensions();
 
   const [name, setName] = useState(data.name);
-  const [price, setPrice] = useState(data.price?.toString() || '');
-  const [imageUri, setImageUri] = useState(data.imageUri || '');
-  const [categoryId, setCategoryId] = useState(data.categoryId || null);
-  const [categories, setCategories] = useState<{ id: number; name: string }[]>([]);
+  const [price, setPrice] = useState(type === 'item' ? (data as Item).price?.toString() || '' : '');
+  const [imageUri, setImageUri] = useState(type === 'item' ? (data as Item).imageUri || '' : '');
+  const [categoryId, setCategoryId] = useState(type === 'item' ? (data as Item).categoryId || null : null);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -46,9 +61,11 @@ export default function EditModal({ visible, onClose, type, data, refresh }: Edi
   useEffect(() => {
     if (visible) {
       setName(data.name);
-      setPrice(data.price?.toString() || '');
-      setImageUri(data.imageUri || '');
-      setCategoryId(data.categoryId || null);
+      if (type === 'item') {
+        setPrice((data as Item).price?.toString() || '');
+        setImageUri((data as Item).imageUri || '');
+        setCategoryId((data as Item).categoryId || null);
+      }
     }
   }, [visible, data]);
 
@@ -81,12 +98,16 @@ export default function EditModal({ visible, onClose, type, data, refresh }: Edi
 
             let updatedData = { ...data, name: name.trim() };
 
+            const storedCategories = await AsyncStorage.getItem('categories');
+            let categories: Category[] = storedCategories ? JSON.parse(storedCategories) : [];
+
             if (type === 'item') {
               if (!price.trim() || !categoryId) {
                 Alert.alert('Error', 'Please fill all fields.');
                 setLoading(false);
                 return;
               }
+
               updatedData = {
                 ...updatedData,
                 price: parseFloat(price),
@@ -94,25 +115,39 @@ export default function EditModal({ visible, onClose, type, data, refresh }: Edi
                 categoryId,
                 categoryName: categories.find(cat => cat.id === categoryId)?.name || 'No Category'
               };
-              refresh(updatedData);
-              const success = await updateItem(data.id, name.trim(), parseFloat(price), imageUri, categoryId);
-              if (success) {
-                Alert.alert('Success', 'Item updated successfully!');
-                onClose();
-              } else {
-                Alert.alert('Error', 'Failed to update item.');
+
+              // Update item in AsyncStorage
+              const storedItems = await AsyncStorage.getItem('items');
+              let items: Item[] = storedItems ? JSON.parse(storedItems) : [];
+
+              const updatedItems = items.map((item: Item) => 
+                item.id === data.id ? (updatedData as Item) : item
+              );
+              await AsyncStorage.setItem('items', JSON.stringify(updatedItems));
+
+              // Update category counts
+              if ((data as Item).categoryId !== categoryId) {
+                categories = categories.map((category: Category) => {
+                  if (category.id === (data as Item).categoryId) {
+                    return { ...category, count: Math.max((category.count || 1) - 1, 0) };
+                  } else if (category.id === categoryId) {
+                    return { ...category, count: (category.count || 0) + 1 };
+                  }
+                  return category;
+                });
+
+                await AsyncStorage.setItem('categories', JSON.stringify(categories));
               }
+
+              refresh(updatedData as Item);
+              Alert.alert('Success', 'Item updated successfully!');
             } else {
-              refresh(updatedData);
-              const success = await updateCategory(data.id, name.trim());
-              if (success) {
-                Alert.alert('Success', 'Category updated successfully!');
-                onClose();
-              } else {
-                Alert.alert('Error', 'Failed to update category.');
-              }
+              refresh(updatedData as Category);
+              Alert.alert('Success', 'Category updated successfully!');
             }
+
             setLoading(false);
+            onClose();
           },
         },
       ]
@@ -130,8 +165,8 @@ export default function EditModal({ visible, onClose, type, data, refresh }: Edi
             style={[
               tw`bg-white p-6 rounded-lg border-4 shadow-xl`,
               {
-                width: screenWidth / 1.2, // Ensures modal width is always half the screen
-                maxWidth: 400, // Prevents it from getting too large
+                width: screenWidth / 1.2,
+                maxWidth: 400,
                 borderColor: colorScheme,
               },
             ]}
@@ -157,7 +192,7 @@ export default function EditModal({ visible, onClose, type, data, refresh }: Edi
                   keyboardType="numeric"
                 />
                 <View style={tw`flex-row flex-wrap border border-black rounded mb-4 p-2`}>
-                  {categories.map((cat) => (
+                  {categories.map((cat: Category) => (
                     <TouchableOpacity
                       key={cat.id}
                       style={tw`p-2 m-1 ${categoryId === cat.id ? `bg-${colorScheme}-500` : 'bg-white border border-black'}`}
@@ -178,26 +213,16 @@ export default function EditModal({ visible, onClose, type, data, refresh }: Edi
                     style={tw`w-full h-40 rounded mb-4 border-2 border-black`} 
                   />
                 )}
-                <TouchableOpacity 
-                  onPress={pickImage} 
-                  style={tw`p-3 bg-${colorScheme}-500 rounded mb-4 shadow-md`}
-                >
+                <TouchableOpacity onPress={pickImage} style={tw`p-3 bg-${colorScheme}-500 rounded mb-4 shadow-md`}>
                   <Text style={tw`text-white text-center`}>Change Photo</Text>
                 </TouchableOpacity>
               </>
             )}
             <View style={tw`flex-row justify-between`}>
-              <TouchableOpacity 
-                onPress={onClose} 
-                style={tw`p-3 bg-${colorScheme}-500 rounded shadow-md flex-1 mr-2`}
-              >
+              <TouchableOpacity onPress={onClose} style={tw`p-3 bg-${colorScheme}-500 rounded shadow-md flex-1 mr-2`}>
                 <Text style={tw`text-white text-center`}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity 
-                onPress={handleSave} 
-                style={tw`p-3 bg-${colorScheme}-500 rounded shadow-md flex-1 ml-2`}
-                disabled={loading}
-              >
+              <TouchableOpacity onPress={handleSave} style={tw`p-3 bg-${colorScheme}-500 rounded shadow-md flex-1 ml-2`} disabled={loading}>
                 <Text style={tw`text-white text-center`}>{loading ? 'Saving...' : 'Save'}</Text>
               </TouchableOpacity>
             </View>
