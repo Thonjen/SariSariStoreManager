@@ -101,6 +101,10 @@ export default function Settings() {
           <Text style={tw`text-white text-center font-semibold`}>Play Minigame</Text>
         </TouchableOpacity>
 
+        <TouchableOpacity onPress={() => navigation.navigate('CategoriesScreen')} style={tw`mt-6 py-3 bg-${colorScheme}-500 rounded shadow-lg`}>
+          <Text style={tw`text-white text-center font-semibold`}>Add Categories</Text>
+        </TouchableOpacity>
+
         {/* About Button */}
         <TouchableOpacity onPress={() => setModalVisible(true)} style={tw`mt-6 py-3 bg-${colorScheme}-800 rounded shadow-lg`}>
           <Text style={tw`text-white text-center font-semibold`}>About</Text>
