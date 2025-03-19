@@ -18,7 +18,6 @@ export const ThemeContext = createContext<ThemeContextType>({
   setColorScheme: () => {},
 });
 
-// Define the props type for ThemeProvider
 type ThemeProviderProps = {
   children: ReactNode;
 };
