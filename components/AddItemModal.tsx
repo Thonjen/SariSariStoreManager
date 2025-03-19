@@ -1,123 +1,243 @@
-import tw from 'tailwind-react-native-classnames';
-import React, { useState, useEffect, useContext } from 'react';
-import { Modal, View, Text, TextInput, Button, Image, ActivityIndicator, Alert } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
-import RNPickerSelect from 'react-native-picker-select';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { insertItem, fetchCategories } from '../lib/database';
-import { ItemsContext } from '../lib/ItemsContext';
-import { ThemeContext } from '../lib/ThemeContext';
+import React, { useState, useEffect, useContext } from "react";
+import {
+  Modal,
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  Image,
+  Alert,
+  ActivityIndicator,
+  SafeAreaView,
+} from "react-native";
+import * as ImagePicker from "expo-image-picker";
+import { Picker } from "@react-native-picker/picker";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { ItemsContext, ItemType } from "../lib/ItemsContext";
+import { ThemeContext } from "../lib/ThemeContext";
+import tw from "tailwind-react-native-classnames";
+import { Ionicons } from "@expo/vector-icons";
 
-
-// Define Props Type
 type AddItemModalProps = {
   visible: boolean;
   onClose: () => void;
 };
 
-const AddItemModal: React.FC<AddItemModalProps> = ({ visible, onClose }) => {
-  const { updateItems } = useContext(ItemsContext);
-  const { theme, colorScheme } = useContext(ThemeContext);
-
-  const [name, setName] = useState('');
-  const [price, setPrice] = useState('');
+export default function AddItemModal({ visible, onClose }: AddItemModalProps) {
+  const [name, setName] = useState("");
+  const [price, setPrice] = useState<number | null>(null);
   const [categoryId, setCategoryId] = useState<number | null>(null);
   const [imageUri, setImageUri] = useState<string | null>(null);
-  const [categories, setCategories] = useState<{ id: number; name: string }[]>([]);
+  const [categories, setCategories] = useState<{ id: number; name: string }[]>(
+    []
+  );
   const [loading, setLoading] = useState(false);
+  const { items, setItems } = useContext(ItemsContext);
+  const { colorScheme } = useContext(ThemeContext);
 
   useEffect(() => {
+    const loadCategories = async () => {
+      try {
+        const storedCategories = await AsyncStorage.getItem("categories");
+        const cats = storedCategories ? JSON.parse(storedCategories) : [];
+        if (!Array.isArray(cats)) throw new Error("Invalid categories format");
+        setCategories(cats);
+        setCategoryId(cats.length > 0 ? cats[0].id : null);
+      } catch (error) {
+        console.error("Error loading categories:", error);
+        setCategories([]); // Prevent empty data from crashing the UI
+      }
+    };
     loadCategories();
   }, []);
+  
 
-  const loadCategories = async () => {
-    const fetchedCategories = await fetchCategories();
-    setCategories(fetchedCategories);
-    if (fetchedCategories.length > 0) {
-      setCategoryId(fetchedCategories[0].id);
+  const pickImage = async (source: "camera" | "gallery") => {
+    try {
+      let result;
+      const mediaType = ImagePicker.MediaTypeOptions.Images;
+      
+      if (source === "camera") {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== "granted") throw new Error("Camera permission denied");
+  
+        result = await ImagePicker.launchCameraAsync({
+          mediaTypes: mediaType,
+          quality: 0.7,
+        });
+      } else {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== "granted") throw new Error("Gallery permission denied");
+  
+        result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: mediaType,
+          quality: 0.7,
+        });
+      }
+  
+      if (!result.canceled) {
+        setImageUri(result.assets[0]?.uri || null);
+      }
+    } catch (error) {
+      console.error("Image Picker Error:", error);
+      Alert.alert("Error", "Failed to pick image.");
     }
   };
-
-  const pickImage = async (useCamera: boolean) => {
-    const permissionResult = useCamera
-      ? await ImagePicker.requestCameraPermissionsAsync()
-      : await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-    if (!permissionResult.granted) {
-      Alert.alert('Permission required', 'You need to allow camera access.');
-      return;
-    }
-
-    const result = useCamera
-      ? await ImagePicker.launchCameraAsync()
-      : await ImagePicker.launchImageLibraryAsync();
-
-    if (!result.canceled) {
-      setImageUri(result.assets[0].uri);
-    }
-  };
+  
 
   const handleSave = async () => {
-    if (!name || !price || !categoryId) {
-      Alert.alert('Validation Error', 'Please fill in all fields.');
-      return;
-    }
-
-    const existingItems = await AsyncStorage.getItem('items');
-    const items = existingItems ? JSON.parse(existingItems) : [];
-
-    if (items.some((item: { name: string }) => item.name.toLowerCase() === name.toLowerCase())) {
-      Alert.alert('Duplicate Item', 'An item with this name already exists.');
-      return;
-    }
-
     setLoading(true);
-    const newItemId = await insertItem(name, parseFloat(price), imageUri ?? '', categoryId);
-    if (newItemId) {
-      updateItems();
-      onClose();
+    if (!name || price === null || isNaN(price) || !categoryId || !imageUri) {
+      Alert.alert(
+        "Missing Fields",
+        "Please fill in all fields and select an image."
+      );
+      setLoading(false);
+      return;
     }
+
+    const storedItems = await AsyncStorage.getItem("items");
+    const existingItems: ItemType[] = storedItems
+      ? JSON.parse(storedItems)
+      : [];
+
+    // Prevent duplicate names
+    if (
+      existingItems.some(
+        (item) => item.name.trim().toLowerCase() === name.trim().toLowerCase()
+      )
+    ) {
+      Alert.alert("Duplicate Item", "An item with this name already exists.");
+      setLoading(false);
+      return;
+    }
+
+    // Add new item
+    const newItem: ItemType = {
+      id: Date.now(),
+      name,
+      price,
+      categoryId,
+      imageUri,
+    };
+    const updatedItems = [...existingItems, newItem];
+    await AsyncStorage.setItem("items", JSON.stringify(updatedItems));
+    setItems(updatedItems);
+
+    // Update category count
+    const storedCategories = await AsyncStorage.getItem("categories");
+    let categories = storedCategories ? JSON.parse(storedCategories) : [];
+
+    categories = categories.map((category: any) =>
+      category.id === categoryId
+        ? { ...category, count: (category.count || 0) + 1 }
+        : category
+    );
+
+    await AsyncStorage.setItem("categories", JSON.stringify(categories));
+
     setLoading(false);
+    onClose();
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent>
-      <View style={tw`flex-1 justify-center items-center bg-black bg-opacity-50`}>
-        <View style={[tw`w-80 p-5 rounded-lg bg-${colorScheme}-500`]}>
-          <Text style={[tw`text-lg font-bold mb-4 text-black`]}>Add New Item</Text>
+    <Modal visible={visible} animationType="slide" transparent={true}>
+      <SafeAreaView style={tw`flex-1 justify-center bg-gray-900 bg-opacity-50`}>
+
+        <View style={tw`bg-white p-5 rounded-lg mx-5`}>
+          <Text style={tw`text-xl font-bold text-center mb-4`}>Add Item</Text>
+
+          {/* Name Input */}
+          <Text style={tw`text-sm font-semibold`}>Item Name</Text>
           <TextInput
-            placeholder="Item Name"
+            style={tw`border border-gray-300 p-2 rounded mb-3`}
+            placeholder="Enter item name"
             value={name}
             onChangeText={setName}
-            style={[tw`border-b mb-3 p-2 text-black`]}
           />
+
+          {/* Price Input */}
+          <Text style={tw`text-sm font-semibold`}>Price</Text>
           <TextInput
-            placeholder="Price"
-            value={price}
-            onChangeText={setPrice}
+            style={tw`border border-gray-300 p-2 rounded mb-3`}
+            placeholder="Enter price"
             keyboardType="numeric"
-            style={[tw`border-b mb-3 p-2 text-black`]}
+            value={price !== null ? price.toString() : ""}
+            onChangeText={(text) => setPrice(text ? parseFloat(text) : null)}
           />
-          <RNPickerSelect
-            onValueChange={setCategoryId}
-            items={categories.map(cat => ({ label: cat.name, value: cat.id }))}
-            value={categoryId}
-          />
-          {imageUri && <Image source={{ uri: imageUri }} style={tw`w-24 h-24 mt-3 self-center`} />}
-          <View style={tw`mt-3`}>
-            <Button title="Pick Image from Gallery" onPress={() => pickImage(false)} />
-            <Button title="Take a Picture" onPress={() => pickImage(true)} />
+
+          {/* Category Picker */}
+          <Text style={tw`text-sm font-semibold`}>Category</Text>
+          <View style={tw`border border-gray-300 rounded mb-3`}>
+            <Picker
+              selectedValue={categoryId}
+              onValueChange={(value) => setCategoryId(value)}
+              style={tw`p-2`}
+            >
+              <Picker.Item label="Select Category" value={null} />
+              {categories.map((cat) => (
+                <Picker.Item key={cat.id} label={cat.name} value={cat.id} />
+              ))}
+            </Picker>
           </View>
-          {loading ? (
-            <ActivityIndicator size="large" color={colorScheme} />
+
+          {/* Image Picker Buttons */}
+          <Text style={tw`text-sm font-semibold`}>Item Image</Text>
+          <View style={tw`flex-row justify-between mb-3`}>
+            <TouchableOpacity
+              style={tw`bg-blue-500 flex-1 p-2 rounded mr-2 flex-row items-center justify-center`}
+              onPress={() => pickImage("camera")}
+            >
+              <Ionicons name="camera" size={20} color="#fff" />
+              <Text style={tw`text-white ml-2`}>Camera</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={tw`bg-green-500 flex-1 p-2 rounded flex-row items-center justify-center`}
+              onPress={() => pickImage("gallery")}
+            >
+              <Ionicons name="images" size={20} color="#fff" />
+              <Text style={tw`text-white ml-2`}>Gallery</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Image Preview */}
+          {imageUri ? (
+            <Image
+              source={{ uri: imageUri }}
+              style={tw`w-full h-40 rounded mb-3`}
+            />
           ) : (
-            <Button title="Save Item" onPress={handleSave} />
+            <View
+              style={tw`w-full h-32 border border-gray-300 rounded flex items-center justify-center`}
+            >
+              <Ionicons name="image" size={50} color="#ccc" />
+              <Text style={tw`text-gray-500`}>No Image Selected</Text>
+            </View>
           )}
-          <Button title="Cancel" color="red" onPress={onClose} />
+
+          {/* Save & Cancel Buttons */}
+          <View style={tw`flex-row justify-between mt-4`}>
+            <TouchableOpacity
+              style={tw`bg-green-600 flex-1 p-2 rounded mr-2`}
+              onPress={handleSave}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={tw`text-white text-center`}>Save</Text>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={tw`bg-red-500 flex-1 p-2 rounded`}
+              onPress={onClose}
+            >
+              <Text style={tw`text-white text-center`}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
+      </SafeAreaView>
     </Modal>
   );
-};
-
-export default AddItemModal;
+}
