@@ -17,6 +17,9 @@ import { ItemsContext, ItemType } from "../lib/ItemsContext";
 import { ThemeContext } from "../lib/ThemeContext";
 import tw from "tailwind-react-native-classnames";
 import { Ionicons } from "@expo/vector-icons";
+import { eventBus } from "@/lib/eventBus";
+
+
 
 type AddItemModalProps = {
   visible: boolean;
@@ -95,12 +98,10 @@ export default function AddItemModal({ visible, onClose }: AddItemModalProps) {
       setLoading(false);
       return;
     }
-
+  
     const storedItems = await AsyncStorage.getItem("items");
-    const existingItems: ItemType[] = storedItems
-      ? JSON.parse(storedItems)
-      : [];
-
+    const existingItems: ItemType[] = storedItems ? JSON.parse(storedItems) : [];
+  
     // Prevent duplicate names
     if (
       existingItems.some(
@@ -111,7 +112,7 @@ export default function AddItemModal({ visible, onClose }: AddItemModalProps) {
       setLoading(false);
       return;
     }
-
+  
     // Add new item
     const newItem: ItemType = {
       id: Date.now(),
@@ -123,22 +124,26 @@ export default function AddItemModal({ visible, onClose }: AddItemModalProps) {
     const updatedItems = [...existingItems, newItem];
     await AsyncStorage.setItem("items", JSON.stringify(updatedItems));
     setItems(updatedItems);
-
+  
+    // Notify POSScreen about the update
+    eventBus.emit("itemsUpdated");
+  
     // Update category count
     const storedCategories = await AsyncStorage.getItem("categories");
     let categories = storedCategories ? JSON.parse(storedCategories) : [];
-
+  
     categories = categories.map((category: any) =>
       category.id === categoryId
         ? { ...category, count: (category.count || 0) + 1 }
         : category
     );
-
+  
     await AsyncStorage.setItem("categories", JSON.stringify(categories));
-
+  
     setLoading(false);
     onClose();
   };
+  
 
   return (
     <Modal visible={visible} animationType="slide" transparent={true}>

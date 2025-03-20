@@ -15,6 +15,7 @@ import { fetchItems, fetchCategories } from "@/lib/database";
 import { useRouter } from "expo-router";
 import tw from "tailwind-react-native-classnames";
 import { ThemeContext } from '@/lib/ThemeContext';
+import { eventBus } from "@/lib/eventBus";
 
 
 
@@ -60,21 +61,34 @@ export default function POSScreen() {
       const fetchedCategories = await fetchCategories();
       setItems(fetchedItems);
       setCategories(fetchedCategories);
-
+  
       // Load cart from storage
       const storedCart = await AsyncStorage.getItem("cart");
       if (storedCart) setCart(JSON.parse(storedCart));
-
+  
       // Load past transactions
       const storedTransactions = await AsyncStorage.getItem("transactions");
       if (storedTransactions) setTransactions(JSON.parse(storedTransactions));
     };
     loadItems();
   }, []);
-
+  
   useEffect(() => {
     AsyncStorage.setItem("cart", JSON.stringify(cart));
   }, [cart]);
+  
+  useEffect(() => {
+    const updateItems = async () => {
+      const fetchedItems = await fetchItems();
+      setItems(fetchedItems);
+    };
+  
+    eventBus.on("itemsUpdated", updateItems);
+    return () => {
+      eventBus.off("itemsUpdated", updateItems);
+    };
+  }, [setItems]);
+  
 
   const addToCart = (item: Item) => {
     setCart((prevCart) => {
@@ -210,37 +224,34 @@ export default function POSScreen() {
       {/* Items Grid or No Items View */}
       {filteredItems.length > 0 ? (
         <FlatList
-        data={filteredItems}
-        key="grid"
-        keyExtractor={(item) => item.id.toString()}
-        numColumns={3}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={tw`w-1/3 p-2 bg-white rounded-lg shadow-lg items-center`} // No need for mr-2 or mb-4
-            onPress={() => addToCart(item)}
-          >
-            {item.imageUri ? (
-              <Image
-                source={{ uri: item.imageUri }}
-                style={tw`w-24 h-24 rounded-lg mb-2`}
-                resizeMode="cover"
-              />
-            ) : (
-              <View
-                style={tw`w-24 h-24 bg-gray-300 rounded-lg mb-2 items-center justify-center`}
-              >
-                <Text style={tw`text-gray-500 text-sm`}>No Image</Text>
-              </View>
-            )}
-            <Text style={tw`text-center font-semibold text-sm`}>
-              {item.name}
-            </Text>
-            <Text style={tw`text-${colorScheme}-500 font-bold text-sm`}>
-              ₱{item.price.toFixed(2)}
-            </Text>
-          </TouchableOpacity>
-        )}
-      />
+  data={filteredItems}
+  keyExtractor={(item) => item.id.toString()}
+  numColumns={3}
+  columnWrapperStyle={tw`justify-between`} // Ensures proper spacing
+  contentContainerStyle={tw`p-2`} // Adds padding around the grid
+  renderItem={({ item }) => (
+    <TouchableOpacity
+      style={tw`flex-1 m-1 p-2 bg-white rounded-lg shadow-lg items-center`} // Uses flex-1 for proper grid alignment
+      onPress={() => addToCart(item)}
+    >
+      {item.imageUri ? (
+        <Image
+          source={{ uri: item.imageUri }}
+          style={tw`w-24 h-24 rounded-lg mb-2`}
+          resizeMode="cover"
+        />
+      ) : (
+        <View style={tw`w-24 h-24 bg-gray-300 rounded-lg mb-2 items-center justify-center`}>
+          <Text style={tw`text-gray-500 text-sm`}>No Image</Text>
+        </View>
+      )}
+      <Text style={tw`text-center font-semibold text-sm`}>{item.name}</Text>
+      <Text style={tw`text-${colorScheme}-500 font-bold text-sm`}>₱{item.price.toFixed(2)}</Text>
+    </TouchableOpacity>
+  )}
+/>
+
+
       
       ) : (
         <View style={tw`flex-1 items-center justify-center my-10`}>
