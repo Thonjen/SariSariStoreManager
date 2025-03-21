@@ -5,6 +5,10 @@ import { MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ItemsContext } from '../lib/ItemsContext';
 import { ThemeContext } from '../lib/ThemeContext';
+import { eventBus } from "@/lib/eventBus";
+
+
+
 
 const ItemCard = ({ item, onEdit }) => {
   const { items, setItems } = useContext(ItemsContext);
@@ -48,6 +52,8 @@ const ItemCard = ({ item, onEdit }) => {
             const storedDeleted = JSON.parse(await AsyncStorage.getItem('recentlyDeleted')) || [];
             const updatedDeleted = [...storedDeleted, item];
             await AsyncStorage.setItem('recentlyDeleted', JSON.stringify(updatedDeleted));
+            eventBus.emit("itemsUpdated");
+
           } catch (error) {
             console.error('Error deleting item:', error);
           } finally {

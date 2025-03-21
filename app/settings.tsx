@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState } from 'react';
+import React, { useContext, useEffect, useState, useCallback  } from 'react';
 import { SafeAreaView, View, Text, TouchableOpacity, Image, Modal, Alert } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import tw from 'tailwind-react-native-classnames';
@@ -6,6 +6,8 @@ import { ThemeContext } from '@/lib/ThemeContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fetchCategories, fetchItems } from '@/lib/database';
 import { MaterialIcons } from '@expo/vector-icons';
+import { eventBus } from "@/lib/eventBus";
+import { useFocusEffect } from '@react-navigation/native';
 
 
 export default function Settings() {
@@ -54,20 +56,45 @@ export default function Settings() {
       const items = await fetchItems();
       const transactions = JSON.parse(await AsyncStorage.getItem('transactions') || '[]'); // Default fallback
       const deletedItems = JSON.parse(await AsyncStorage.getItem('recentlyDeleted') || '[]'); // Default fallback
+      eventBus.emit("itemsUpdated");
 
       setTotalCategories(categories.length);
       setTotalItems(items.length);
       setTotalTransactions(transactions.length);
       setRecentlyDeleted(deletedItems.length);
+
     } catch (error) {
       console.error('Error loading statistics:', error);
     }
   };
 
   useEffect(() => {
-    loadStorage();
-    loadStatistics();
+    loadStorage(); // Load storage only once when the component mounts
+    
+    const handleItemsUpdated = async () => {
+      await loadStatistics(); // Update stats when items are updated
+    };
+    const handleTransactionsUpdated = async () => {
+      await loadStatistics(); // Update stats when items are updated
+    };
+  
+    eventBus.on("itemsUpdated", handleItemsUpdated);
+    eventBus.on("transactionsUpdated", handleTransactionsUpdated);
+
+  
+    return () => {
+      eventBus.off("itemsUpdated", handleItemsUpdated);
+      eventBus.off("transactionsUpdated", handleTransactionsUpdated);
+
+    };
   }, []);
+  
+  useFocusEffect(
+    useCallback(() => {
+      loadStatistics(); // Ensure stats update when screen is focused
+    }, [])
+  );
+  
 
   useEffect(() => {
     saveStorage();

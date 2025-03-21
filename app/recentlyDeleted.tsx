@@ -4,6 +4,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ThemeContext } from "../lib/ThemeContext";
 import { MaterialIcons } from "@expo/vector-icons";
 import tw from "tailwind-react-native-classnames";
+import { eventBus } from "@/lib/eventBus";
+
 
 // Define Item Type
 type Item = {
@@ -51,7 +53,9 @@ const RecentlyDeletedScreen = () => {
               // Remove from recently deleted
               const updatedDeleted = deletedItems.filter((i) => i.id !== item.id);
               await AsyncStorage.setItem("recentlyDeleted", JSON.stringify(updatedDeleted));
+
               setDeletedItems(updatedDeleted);
+              eventBus.emit("itemsUpdated"); // Notify Settings.tsx
             } catch (error) {
               console.error("Error restoring item:", error);
             }
@@ -75,6 +79,7 @@ const RecentlyDeletedScreen = () => {
               const updatedDeleted = deletedItems.filter((i) => i.id !== item.id);
               await AsyncStorage.setItem("recentlyDeleted", JSON.stringify(updatedDeleted));
               setDeletedItems(updatedDeleted);
+              eventBus.emit("itemsUpdated"); // Notify Settings.tsx
             } catch (error) {
               console.error("Error deleting item permanently:", error);
             }

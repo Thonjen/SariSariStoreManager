@@ -14,6 +14,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import EditModal from '@/components/EditModal';
 import { ThemeContext } from '@/lib/ThemeContext';
 import { Animated } from 'react-native';
+import { eventBus } from '@/lib/eventBus';
 
 // Define category type
 interface Category {
@@ -46,6 +47,8 @@ export default function Categories() {
     loadCategories();
   }, []);
 
+  
+
   // Add new category
   const handleAddCategory = async () => {
     const trimmedName = newCategory.trim();
@@ -73,6 +76,9 @@ export default function Categories() {
             setCategories(updatedCategories);
             setNewCategory('');
             setLoading(false);
+
+            // Emit event to notify other components
+            eventBus.emit('categoriesUpdated');
           }
         }
       ]

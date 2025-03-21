@@ -21,6 +21,8 @@ import { ThemeContext } from '@/lib/ThemeContext';
 import { LinearGradient } from 'expo-linear-gradient';
 import AddItemModal from '@/components/AddItemModal';
 
+
+
 type NamePriceSortOption = {
   label: string;
   field: 'name' | 'price';
@@ -152,9 +154,9 @@ export default function ItemsScreen() {
         />
 
         {/* Filter & Sort Buttons */}
-        <View style={tw`flex-row justify-between mb-6`}>
-          <GradientButton text="Filter Categories" onPress={() => setShowFilterModal(true)} />
-          <GradientButton text="Sort Items" onPress={() => setShowSortModal(true)} />
+        <View style={tw`flex-row justify-center mb-2`}>
+          <GradientButton text="Filter Categories" icon="filter-list" onPress={() => setShowFilterModal(true)} />
+          <GradientButton text="Sort Items" icon="sort" onPress={() => setShowSortModal(true)} />
         </View>
 
         {/* Item List */}
@@ -342,9 +344,11 @@ export default function ItemsScreen() {
 // Custom Gradient Button used for Filter/Sort actions.
 const GradientButton = ({
   text,
+  icon,
   onPress,
 }: {
   text: string;
+  icon?: keyof typeof MaterialIcons.glyphMap;
   onPress: () => void;
 }) => {
   const { colorScheme } = useContext(ThemeContext);
@@ -355,8 +359,6 @@ const GradientButton = ({
     purple: ['#A78BFA', '#8B5CF6'],
   };
   const gradientColors = gradientColorsMap[colorScheme] || gradientColorsMap.blue;
-
-  // Safely cast to `readonly [string, string]`
   const gradientColorsSafe = gradientColors as unknown as readonly [string, string];
 
   return (
@@ -365,12 +367,14 @@ const GradientButton = ({
       style={{ flex: 1, marginHorizontal: 4, borderRadius: 25, overflow: 'hidden' }}
     >
       <LinearGradient
-        colors={gradientColorsSafe} // Use the safely cast gradientColors
+        colors={gradientColorsSafe}
         start={[0, 0]}
         end={[1, 0]}
-        style={{ paddingVertical: 12, alignItems: 'center', justifyContent: 'center' }}
+        style={tw`flex-row items-center justify-center py-2`}
       >
-        <Text style={tw`text-white font-semibold text-base`}>{text}</Text>
+        {icon && <MaterialIcons name={icon} size={20} color="white" style={tw`mr-2`} />}
+        <Text style={tw`text-white font-bold text-sm`}>
+        {text}</Text>
       </LinearGradient>
     </TouchableOpacity>
   );

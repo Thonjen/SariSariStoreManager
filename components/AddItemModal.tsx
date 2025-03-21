@@ -52,6 +52,12 @@ export default function AddItemModal({ visible, onClose }: AddItemModalProps) {
       }
     };
     loadCategories();
+
+    // Listen for category updates
+    eventBus.on('categoriesUpdated', loadCategories);
+    return () => {
+      eventBus.off('categoriesUpdated', loadCategories);
+    };
   }, []);
   
 
@@ -140,9 +146,16 @@ export default function AddItemModal({ visible, onClose }: AddItemModalProps) {
   
     await AsyncStorage.setItem("categories", JSON.stringify(categories));
   
+    // Reset form fields after successful save
+    setName("");
+    setPrice(null);
+    setCategoryId(categories.length > 0 ? categories[0].id : null);
+    setImageUri(null);
+  
     setLoading(false);
     onClose();
   };
+  
   
 
   return (

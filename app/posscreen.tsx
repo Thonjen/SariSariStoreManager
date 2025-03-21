@@ -71,6 +71,12 @@ export default function POSScreen() {
       if (storedTransactions) setTransactions(JSON.parse(storedTransactions));
     };
     loadItems();
+
+    // Listen for category updates
+    eventBus.on('categoriesUpdated', loadItems);
+    return () => {
+      eventBus.off('categoriesUpdated', loadItems);
+    };
   }, []);
   
   useEffect(() => {
@@ -149,18 +155,20 @@ export default function POSScreen() {
     const change = cash - totalAmount;
   
     const newTransaction = {
-      date: new Date().toISOString(), // ISO format for proper sorting
+      date: new Date().toISOString(),
       total: totalAmount,
-      payment: cash, // Cash received
-      change: change, // Change given
+      payment: cash,
+      change: change,
       items: cart,
     };
   
-    const updatedTransactions = [newTransaction, ...transactions].slice(0, 5);
+    const updatedTransactions = [newTransaction, ...transactions]; // Stores all transactions
     setTransactions(updatedTransactions);
     await AsyncStorage.setItem("transactions", JSON.stringify(updatedTransactions));
   
-    // Clear the cart after successful payment
+    // Emit event so other screens can update
+    eventBus.emit("transactionsUpdated");
+  
     setCart([]);
     await AsyncStorage.removeItem("cart");
   
@@ -170,6 +178,7 @@ export default function POSScreen() {
   
     Alert.alert("Payment Successful", `Change: ₱${change.toFixed(2)}`);
   };
+  
   
 
   return (
