@@ -250,9 +250,11 @@ export default function POSScreen() {
           resizeMode="cover"
         />
       ) : (
-        <View style={tw`w-24 h-24 bg-gray-300 rounded-lg mb-2 items-center justify-center`}>
-          <Text style={tw`text-gray-500 text-sm`}>No Image</Text>
-        </View>
+        <Image
+          source={require("../assets/images/No_Image_Available.jpg")}
+          style={tw`w-24 h-24 rounded-lg mb-2`}
+          resizeMode="cover"
+        />
       )}
       <Text style={tw`text-center font-semibold text-sm`}>{item.name}</Text>
       <Text style={tw`text-${colorScheme}-500 font-bold text-sm`}>₱{item.price.toFixed(2)}</Text>

@@ -105,6 +105,9 @@ export default function Categories() {
     await AsyncStorage.setItem('categories', JSON.stringify(updatedCategories));
     setCategories(updatedCategories);
     setLoading(false);
+
+    // Emit event to notify other components
+    eventBus.emit('categoriesUpdated');
   };
 
   // Open edit modal
@@ -133,6 +136,11 @@ export default function Categories() {
     const updatedCategories = categories.map(cat => (cat.id === newCat.id ? newCat : cat));
     await AsyncStorage.setItem('categories', JSON.stringify(updatedCategories));
     setCategories(updatedCategories);
+    setEditModalVisible(false); // Close the modal after editing
+
+    // Emit event to notify other components
+    eventBus.emit('categoriesUpdated');
+    eventBus.emit('categoryNameUpdated', newCat); // Emit event for category name update
   };
 
   return (

@@ -106,7 +106,7 @@ const RecentlyDeletedScreen = () => {
             >
               {/* Item Image */}
               <Image
-                source={item.imageUri ? { uri: item.imageUri } : require("../assets/images/Placeholder.jpg")}
+                source={item.imageUri ? { uri: item.imageUri } : require("../assets/images/No_Image_Available.jpg")}
                 style={tw`w-16 h-16 rounded-lg`}
               />
 

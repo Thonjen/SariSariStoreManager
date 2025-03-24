@@ -19,8 +19,6 @@ import tw from "tailwind-react-native-classnames";
 import { Ionicons } from "@expo/vector-icons";
 import { eventBus } from "@/lib/eventBus";
 
-
-
 type AddItemModalProps = {
   visible: boolean;
   onClose: () => void;
@@ -37,6 +35,7 @@ export default function AddItemModal({ visible, onClose }: AddItemModalProps) {
   const [loading, setLoading] = useState(false);
   const { items, setItems } = useContext(ItemsContext);
   const { colorScheme } = useContext(ThemeContext);
+  const [imagePickerVisible, setImagePickerVisible] = useState(false);
 
   useEffect(() => {
     const loadCategories = async () => {
@@ -90,6 +89,8 @@ export default function AddItemModal({ visible, onClose }: AddItemModalProps) {
     } catch (error) {
       console.error("Image Picker Error:", error);
       Alert.alert("Error", "Failed to pick image.");
+    } finally {
+      setImagePickerVisible(false);
     }
   };
   
@@ -199,40 +200,31 @@ export default function AddItemModal({ visible, onClose }: AddItemModalProps) {
             </Picker>
           </View>
 
-          {/* Image Picker Buttons */}
+          {/* Image Picker */}
           <Text style={tw`text-sm font-semibold`}>Item Image</Text>
-          <View style={tw`flex-row justify-between mb-3`}>
-            <TouchableOpacity
-              style={tw`bg-blue-500 flex-1 p-2 rounded mr-2 flex-row items-center justify-center`}
-              onPress={() => pickImage("camera")}
-            >
-              <Ionicons name="camera" size={20} color="#fff" />
-              <Text style={tw`text-white ml-2`}>Camera</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={tw`bg-green-500 flex-1 p-2 rounded flex-row items-center justify-center`}
-              onPress={() => pickImage("gallery")}
-            >
-              <Ionicons name="images" size={20} color="#fff" />
-              <Text style={tw`text-white ml-2`}>Gallery</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Image Preview */}
-          {imageUri ? (
-            <Image
-              source={{ uri: imageUri }}
-              style={tw`w-full h-40 rounded mb-3`}
-            />
-          ) : (
-            <View
-              style={tw`w-full h-32 border border-gray-300 rounded flex items-center justify-center`}
-            >
-              <Ionicons name="image" size={50} color="#ccc" />
-              <Text style={tw`text-gray-500`}>No Image Selected</Text>
-            </View>
-          )}
+          <TouchableOpacity onPress={() => setImagePickerVisible(true)}>
+            {imageUri ? (
+              <View>
+                <Image
+                  source={{ uri: imageUri }}
+                  style={tw`w-full h-40 rounded mb-3`}
+                />
+                <Text style={tw`absolute bottom-2 right-2 bg-black text-white p-1 rounded`}>
+                  Press to change/add photo
+                </Text>
+              </View>
+            ) : (
+              <View>
+                <Image
+                  source={require("../assets/images/No_Image_Available.jpg")}
+                  style={tw`w-full h-40 rounded mb-3`}
+                />
+                <Text style={tw`absolute bottom-2 right-2 bg-black text-white p-1 rounded`}>
+                  Press to change/add photo
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
 
           {/* Save & Cancel Buttons */}
           <View style={tw`flex-row justify-between mt-4`}>
@@ -256,6 +248,37 @@ export default function AddItemModal({ visible, onClose }: AddItemModalProps) {
           </View>
         </View>
       </SafeAreaView>
+
+      <Modal
+        visible={imagePickerVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setImagePickerVisible(false)}
+      >
+        <SafeAreaView style={tw`flex-1 justify-center items-center bg-black bg-opacity-50`}>
+          <View style={tw`bg-white p-6 rounded-lg mx-5`}>
+            <Text style={tw`text-lg font-bold mb-4 text-center`}>Select Image Source</Text>
+            <TouchableOpacity
+              onPress={() => pickImage("gallery")}
+              style={tw`p-3 bg-${colorScheme}-500 rounded mb-4 shadow-md`}
+            >
+              <Text style={tw`text-white text-center`}>Choose from Gallery</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => pickImage("camera")}
+              style={tw`p-3 bg-${colorScheme}-700 rounded shadow-md`}
+            >
+              <Text style={tw`text-white text-center`}>Take Photo</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setImagePickerVisible(false)}
+              style={tw`p-3 bg-gray-500 rounded mt-4 shadow-md`}
+            >
+              <Text style={tw`text-white text-center`}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </Modal>
     </Modal>
   );
 }

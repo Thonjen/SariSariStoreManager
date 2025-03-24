@@ -32,6 +32,19 @@ const ItemCard = ({ item, onEdit }) => {
     };
 
     fetchCategory();
+
+    // Listen for category updates
+    eventBus.on('categoriesUpdated', fetchCategory);
+    eventBus.on('categoryNameUpdated', (updatedCategory) => {
+      if (updatedCategory.id === item.categoryId) {
+        setCategoryName(updatedCategory.name);
+      }
+    });
+
+    return () => {
+      eventBus.off('categoriesUpdated', fetchCategory);
+      eventBus.off('categoryNameUpdated');
+    };
   }, [item.categoryId]);
 
   const handleDelete = async () => {
@@ -68,7 +81,7 @@ const ItemCard = ({ item, onEdit }) => {
     <View style={tw`w-1/2 p-2`}>
       <TouchableOpacity onPress={() => setViewModalVisible(true)} style={tw`rounded-xl overflow-hidden shadow-lg`}>
         <Image
-          source={item.imageUri ? { uri: item.imageUri } : require('../assets/images/Placeholder.jpg')}
+          source={item.imageUri ? { uri: item.imageUri } : require('../assets/images/No_Image_Available.jpg')}
           style={tw`w-full h-48`}
         />
         {/* Overlay with Text */}
@@ -113,7 +126,7 @@ const ItemCard = ({ item, onEdit }) => {
             </Pressable>
             <View style={tw`items-center`}>
               <Image
-                source={item.imageUri ? { uri: item.imageUri } : require('../assets/images/Placeholder.jpg')}
+                source={item.imageUri ? { uri: item.imageUri } : require('../assets/images/No_Image_Available.jpg')}
                 style={tw`w-64 h-64 rounded-lg`}
               />
               <Text style={tw`text-lg font-bold mt-2`}>{item.name}</Text>

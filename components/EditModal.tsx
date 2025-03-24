@@ -11,6 +11,7 @@ import {
   ScrollView,
   Platform,
   useWindowDimensions,
+  SafeAreaView,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import tw from "tailwind-react-native-classnames";
@@ -18,6 +19,7 @@ import { updateItem, updateCategory, fetchCategories } from "../lib/database";
 import { ThemeContext } from "../lib/ThemeContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { eventBus } from '@/lib/eventBus';
+import { Picker } from "@react-native-picker/picker";
 
 type Item = {
   id: number;
@@ -64,6 +66,7 @@ export default function EditModal({
   );
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(false);
+  const [imagePickerVisible, setImagePickerVisible] = useState(false);
 
   useEffect(() => {
     if (type === "item") {
@@ -93,35 +96,37 @@ export default function EditModal({
     }
   }, [visible, data]);
 
-  const pickImage = async () => {
-    let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.5,
-    });
-
-    if (!result.canceled && result.assets.length > 0) {
-      setImageUri(result.assets[0].uri);
-    }
-  };
-
-  const takePhoto = async () => {
+  const pickImage = async (source: "camera" | "gallery") => {
     try {
-      const { status } = await ImagePicker.requestCameraPermissionsAsync();
-      if (status !== "granted") {
-        throw new Error("Camera permission denied");
-      }
+      let result;
+      const mediaType = ImagePicker.MediaTypeOptions.Images;
 
-      let result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        quality: 0.7,
-      });
+      if (source === "camera") {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== "granted") throw new Error("Camera permission denied");
+
+        result = await ImagePicker.launchCameraAsync({
+          mediaTypes: mediaType,
+          quality: 0.7,
+        });
+      } else {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== "granted") throw new Error("Gallery permission denied");
+
+        result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: mediaType,
+          quality: 0.7,
+        });
+      }
 
       if (!result.canceled && result.assets.length > 0) {
         setImageUri(result.assets[0].uri);
       }
     } catch (error) {
-      console.error("Camera Error:", error);
-      Alert.alert("Error", "Failed to take photo.");
+      console.error("Image Picker Error:", error);
+      Alert.alert("Error", "Failed to pick image.");
+    } finally {
+      setImagePickerVisible(false);
     }
   };
 
@@ -194,7 +199,14 @@ export default function EditModal({
             refresh(updatedData as Item);
             Alert.alert("Success", "Item updated successfully!");
           } else {
-            refresh(updatedData as Category);
+            // Update category in AsyncStorage
+            const updatedCategories = categories.map((cat: Category) =>
+              cat.id === data.id ? (updatedData as Category) : cat
+            );
+            await AsyncStorage.setItem("categories", JSON.stringify(updatedCategories));
+
+            refresh(updatedData as Category); // Refresh the parent component with updated data
+            eventBus.emit('categoryNameUpdated', updatedData); // Emit event for category name update
             Alert.alert("Success", "Category updated successfully!");
           }
 
@@ -244,54 +256,43 @@ export default function EditModal({
                   onChangeText={setPrice}
                   keyboardType="numeric"
                 />
-                <View
-                  style={tw`flex-row flex-wrap border border-black rounded mb-4 p-2`}
-                >
-                  {categories.map((cat: Category) => (
-                    <TouchableOpacity
-                      key={cat.id}
-                      style={tw`p-2 m-1 ${
-                        categoryId === cat.id
-                          ? `bg-${colorScheme}-500`
-                          : "bg-white border border-black"
-                      }`}
-                      onPress={() => setCategoryId(cat.id)}
-                    >
-                      <Text
-                        style={tw`${
-                          categoryId === cat.id ? "text-white" : "text-black"
-                        }`}
-                      >
-                        {cat.name}
+                <Text style={tw`text-sm font-semibold`}>Category</Text>
+                <View style={tw`border border-gray-300 rounded mb-4`}>
+                  <Picker
+                    selectedValue={categoryId}
+                    onValueChange={(value) => setCategoryId(value)}
+                    style={tw`p-2`}
+                  >
+                    <Picker.Item label="Select Category" value={null} />
+                    {categories.map((cat) => (
+                      <Picker.Item key={cat.id} label={cat.name} value={cat.id} />
+                    ))}
+                  </Picker>
+                </View>
+                <TouchableOpacity onPress={() => setImagePickerVisible(true)}>
+                  {imageUri ? (
+                    
+                    <View>
+                      <Image
+                        source={{ uri: imageUri }}
+                        style={tw`w-full h-40 rounded mb-4 border-2 border-black`}
+                      />
+                      <Text style={tw`absolute bottom-2 right-2 bg-black text-white p-1 rounded`}>
+                        Press to change/add photo
                       </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-                {imageUri ? (
-                  <Image
-                    source={{ uri: imageUri }}
-                    style={tw`w-full h-40 rounded mb-4 border-2 border-black`}
-                  />
-                ) : (
-                  <Image
-                    source={require("../assets/images/Placeholder.jpg")}
-                    style={tw`w-full h-40 rounded mb-4 border-2 border-black`}
-                  />
-                )}
-                <View style={tw`flex-row justify-between mb-4`}>
-                  <TouchableOpacity
-                    onPress={pickImage}
-                    style={tw`p-3 bg-${colorScheme}-500 rounded flex-1 mr-2 shadow-md`}
-                  >
-                    <Text style={tw`text-white text-center`}>Choose Photo</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={takePhoto}
-                    style={tw`p-3 bg-${colorScheme}-700 rounded flex-1 ml-2 shadow-md`}
-                  >
-                    <Text style={tw`text-white text-center`}>Take Photo</Text>
-                  </TouchableOpacity>
-                </View>
+                    </View>
+                  ) : (
+                    <View>
+                      <Image
+                        source={require("../assets/images/No_Image_Available.jpg")}
+                        style={tw`w-full h-40 rounded mb-4 border-2 border-black`}
+                      />
+                      <Text style={tw`absolute bottom-2 right-2 bg-black text-white p-1 rounded`}>
+                        Press to change/add photo
+                      </Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
               </>
             )}
 
@@ -315,6 +316,37 @@ export default function EditModal({
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <Modal
+        visible={imagePickerVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setImagePickerVisible(false)}
+      >
+        <SafeAreaView style={tw`flex-1 justify-center items-center bg-black bg-opacity-50`}>
+          <View style={tw`bg-white p-6 rounded-lg mx-5`}>
+            <Text style={tw`text-lg font-bold mb-4 text-center`}>Select Image Source</Text>
+            <TouchableOpacity
+              onPress={() => pickImage("gallery")}
+              style={tw`p-3 bg-${colorScheme}-500 rounded mb-4 shadow-md`}
+            >
+              <Text style={tw`text-white text-center`}>Choose from Gallery</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => pickImage("camera")}
+              style={tw`p-3 bg-${colorScheme}-700 rounded shadow-md`}
+            >
+              <Text style={tw`text-white text-center`}>Take Photo</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setImagePickerVisible(false)}
+              style={tw`p-3 bg-gray-500 rounded mt-4 shadow-md`}
+            >
+              <Text style={tw`text-white text-center`}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </Modal>
     </Modal>
   );
 }
